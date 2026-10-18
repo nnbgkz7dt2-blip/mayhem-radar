@@ -1,0 +1,2402 @@
+<!doctype html>
+<html lang="fr" data-mood="wait">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mayhem">
+<title>Mayhem Radar</title>
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="180x180" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Mise en page : une colonne. Live = verdict de l'agent + terminal ancré en bas. Mon PnL = résultat, courbe, catégories, liste des coins. */
+:root{
+  --ink:#0a0e14;
+  --panel:#101722;
+  --panel-2:#16202e;
+  --line:#223040;
+  --line-2:#33465c;
+  --text:#e6ecf4;
+  --muted:#8a98ac;
+  --faint:#5e6c7f;
+  --buy:#2fd393;
+  --sell:#ff5468;
+  --calm:#93a7c4;
+  --buy-rgb:47 211 147;
+  --sell-rgb:255 84 104;
+  --calm-rgb:147 167 196;
+  --mood:var(--calm);
+  --mood-rgb:var(--calm-rgb);
+  --f-display:"Big Shoulders Display","Arial Narrow","Roboto Condensed",Impact,sans-serif;
+  --f-body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --dock:min(36vh,270px);
+  --gut-l:max(16px,env(safe-area-inset-left,0px));
+  --gut-r:max(16px,env(safe-area-inset-right,0px));
+  color-scheme:dark;
+}
+html[data-mood="buy"]{--mood:var(--buy);--mood-rgb:var(--buy-rgb)}
+html[data-mood="sell"]{--mood:var(--sell);--mood-rgb:var(--sell-rgb)}
+*,*::before,*::after{box-sizing:border-box}
+html{background:var(--ink)}
+body{margin:0;min-height:100vh;overflow-x:hidden;background:var(--ink);color:var(--text);font:15px/1.5 var(--f-body);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+button:disabled{cursor:default;opacity:.55}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--mood);outline-offset:2px}
+.in{max-width:880px;margin-left:auto;margin-right:auto;padding-left:var(--gut-l);padding-right:var(--gut-r)}
+.lbl{font:600 11px/1.25 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.up{color:var(--buy)}
+.down{color:var(--sell)}
+
+/* Lueur d'ambiance : un calque par humeur, fondu enchaîné */
+.glow{position:fixed;left:-10vw;right:-10vw;top:-25vh;height:78vh;pointer-events:none;opacity:0;transition:opacity 1s ease;z-index:0}
+.g-buy{background:radial-gradient(55% 55% at 50% 32%,rgb(var(--buy-rgb)/.26),transparent 72%)}
+.g-sell{background:radial-gradient(55% 55% at 50% 32%,rgb(var(--sell-rgb)/.30),transparent 72%)}
+.g-calm{background:radial-gradient(55% 55% at 50% 32%,rgb(var(--calm-rgb)/.12),transparent 72%)}
+html[data-mood="buy"] .g-buy,html[data-mood="sell"] .g-sell,html[data-mood="wait"] .g-calm{opacity:1}
+
+/* En-tête */
+.top{position:sticky;top:0;z-index:20;padding-top:env(safe-area-inset-top,0px);background:rgb(10 14 20/.82);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid rgb(var(--mood-rgb)/.22);transition:border-color .6s}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px 10px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;font:800 22px/1 var(--f-display);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap}
+.brand span{overflow:hidden;text-overflow:ellipsis}
+.brand svg{width:26px;height:26px;flex:none;color:var(--mood);transition:color .6s}
+.status{display:flex;align-items:center;gap:8px;font:500 11.5px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.status .dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--muted)}
+.status[data-s="live"]{color:var(--text)}
+.status[data-s="live"] .dot{background:var(--mood);animation:pulse 1.8s ease-out infinite}
+.status[data-s="down"] .dot,.status[data-s="error"] .dot{background:var(--sell)}
+.clock{font-variant-numeric:tabular-nums;color:var(--muted)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgb(var(--mood-rgb)/.55)}100%{box-shadow:0 0 0 9px rgb(var(--mood-rgb)/0)}}
+.tabs{display:flex;gap:6px;padding-block:0 10px}
+.tab{flex:1;background:transparent;border:1px solid var(--line);border-radius:10px;padding:9px 10px;font:600 13px/1 var(--f-body);color:var(--muted);transition:background-color .2s,color .2s,border-color .2s}
+.tab[aria-selected="true"]{background:var(--text);border-color:var(--text);color:var(--ink)}
+
+/* Vues */
+main{position:relative;z-index:1}
+.view{display:flex;flex-direction:column;gap:16px;padding-block:18px 32px}
+body[data-view="live"] #v-live{padding-bottom:calc(var(--dock) + 28px + env(safe-area-inset-bottom,0px))}
+body.dock-min[data-view="live"] #v-live{padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+.card{background:rgb(16 23 34/.92);border:1px solid var(--line);border-radius:16px;padding:16px;min-width:0}
+.card-title{margin:0 0 12px;font:800 15px/1.2 var(--f-display);letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+
+/* Verdict */
+.board{padding-block:4px 2px}
+.eyebrow{font:600 11.5px/1.3 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.verdict{margin:12px 0 0;font:900 clamp(60px,18vw,120px)/.84 var(--f-display);letter-spacing:.005em;text-transform:uppercase;color:var(--mood);transition:color .6s;text-wrap:balance}
+.verdict .who{display:block;margin-bottom:8px;font:800 clamp(17px,4.6vw,24px)/1 var(--f-display);letter-spacing:.34em;color:var(--text)}
+.subline{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:14px;font:500 15px/1.35 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.subline b{font-weight:700;color:var(--mood);transition:color .6s}
+.clockbar{margin-top:18px}
+.track{position:relative;height:8px;border-radius:99px;background:var(--panel-2);overflow:hidden}
+.track .fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:99px;background:var(--mood);transition:width .9s linear,background-color .6s}
+.track .ticks{position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 calc(100%/6 - 2px),var(--ink) calc(100%/6 - 2px) calc(100%/6))}
+.clockrow{display:flex;justify-content:space-between;gap:8px;margin-top:8px;font:500 12px/1 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.clockrow .left{color:var(--text)}
+.cover{margin:10px 0 0;font-size:13px;color:var(--muted)}
+
+/* Pression achats / ventes */
+.press-top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.pside{display:flex;flex-direction:column;gap:3px;min-width:0}
+.pside.r{align-items:flex-end;text-align:right}
+.pside.l .lbl{color:var(--buy)}
+.pside.r .lbl{color:var(--sell)}
+.pv{font:800 32px/1 var(--f-display);letter-spacing:.01em}
+.pv small{font:600 14px/1 var(--f-mono);color:var(--muted);margin-left:4px}
+.pn{font:500 12.5px/1.2 var(--f-mono);color:var(--muted)}
+.pbar{display:flex;gap:2px;height:12px;margin-top:12px;border-radius:99px;overflow:hidden;background:var(--panel-2)}
+.pbar .b,.pbar .s{flex:1 1 0;transition:flex-grow .6s}
+.pbar .b{background:var(--buy)}
+.pbar .s{background:var(--sell)}
+.pbar.empty .b,.pbar.empty .s{background:var(--panel-2)}
+.basis{margin:10px 0 0;font-size:12.5px;color:var(--muted)}
+
+/* Tuiles */
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tile{background:rgb(16 23 34/.92);border:1px solid var(--line);border-radius:14px;padding:12px;min-width:0}
+.tile .lbl{min-height:2.5em}
+.tv{margin-top:7px;font:800 clamp(18px,5.2vw,23px)/1 var(--f-display);letter-spacing:.02em}
+.tv.buy{color:var(--buy)}
+.tv.sell{color:var(--sell)}
+.ts{margin-top:5px;font:500 12px/1.25 var(--f-mono);color:var(--muted)}
+
+/* Frise des demi-heures */
+.hist-wrap{overflow-x:auto;margin:0 -6px;padding:0 6px 4px;scrollbar-width:thin}
+.hist{display:flex;gap:6px;min-width:min-content}
+.hcol{flex:0 0 50px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px 0;border:0;border-radius:10px;background:none}
+.hcol[aria-pressed="true"]{background:var(--panel-2)}
+.hval{height:11px;font:600 10.5px/1 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.hbox{position:relative;width:100%;height:92px;display:flex;align-items:flex-end;justify-content:center}
+.hbox::after{content:"";position:absolute;left:6px;right:6px;bottom:0;height:1px;background:var(--line)}
+.hbar{width:24px;min-height:4px;border-radius:6px 6px 2px 2px;background:var(--calm)}
+.hcol.buy .hbar{background:var(--buy)}
+.hcol.sell .hbar{background:var(--sell)}
+.hcol.buy .hval{color:var(--buy)}
+.hcol.sell .hval{color:var(--sell)}
+.hcol.partial .hbar{opacity:.5}
+.hcol.live .hbar{outline:1.5px dashed rgb(var(--mood-rgb)/.9);outline-offset:2px}
+.hlab{font:500 11px/1 var(--f-mono);color:var(--muted);white-space:nowrap}
+.hcol.live .hlab{color:var(--text)}
+.hdetail{margin:12px 0 0;font:500 13px/1.5 var(--f-mono);color:var(--muted)}
+
+/* Terminal */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:15;height:calc(var(--dock) + env(safe-area-inset-bottom,0px));padding-bottom:env(safe-area-inset-bottom,0px);display:flex;flex-direction:column;background:#070a0f;border-top:1px solid rgb(var(--mood-rgb)/.5);box-shadow:0 -16px 40px rgb(0 0 0/.5);transition:height .3s ease,border-color .6s}
+body:not([data-view="live"]) .dock{display:none}
+.dock.min{height:calc(46px + env(safe-area-inset-bottom,0px))}
+.dock-head{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding-block:9px 8px}
+.dock-title{display:flex;align-items:center;gap:8px;min-width:0;font:600 11px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.dock-title a{color:var(--text);text-decoration:none;letter-spacing:.04em}
+.dock-btns{display:flex;gap:6px;flex:none}
+.mini{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:600 11px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--text);white-space:nowrap}
+.feed{list-style:none;flex:1;width:100%;margin-top:0;margin-bottom:0;padding-block:0 8px;overflow-y:auto;overscroll-behavior:contain;font:500 12.5px/1.85 var(--f-mono);font-variant-numeric:tabular-nums}
+.dock.min .feed{display:none}
+.ln{display:grid;grid-template-columns:auto 4.6ch minmax(0,1fr) auto;gap:10px;align-items:baseline;white-space:nowrap;border-bottom:1px solid rgb(255 255 255/.035)}
+.ln .t,.ln .m{color:var(--muted);text-decoration:none}
+.ln .sd{font-weight:700}
+.ln .a{overflow:hidden;text-overflow:ellipsis}
+.ln.buy{--c:var(--buy-rgb)}
+.ln.sell{--c:var(--sell-rgb)}
+.ln.buy .sd,.ln.buy .a{color:var(--buy)}
+.ln.sell .sd,.ln.sell .a{color:var(--sell)}
+.ln.mine{background:rgb(var(--c)/.09);box-shadow:inset 3px 0 0 rgb(var(--c))}
+.ln.mine .t{padding-left:8px}
+.ln.mine .m{color:var(--text);font-weight:700}
+.ln.fresh{animation:flash 1.4s ease-out}
+@keyframes flash{from{background:rgb(var(--c)/.22)}to{background:transparent}}
+.feed-empty{padding:4px 0;color:var(--muted);white-space:normal}
+
+/* Contrôles communs */
+.big{margin-top:6px;font:900 clamp(46px,13vw,74px)/.9 var(--f-display);letter-spacing:.01em}
+.form{display:flex;flex-direction:column;gap:14px}
+.form .card-title{margin:0}
+.field{display:flex;flex-direction:column;gap:7px;min-width:0}
+input[type=text],input[type=url],textarea{width:100%;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2);color:var(--text);font:16px/1.3 var(--f-body);-webkit-appearance:none;appearance:none}
+textarea{resize:vertical}
+input::placeholder,textarea::placeholder{color:var(--faint)}
+input:focus,textarea:focus{outline:2px solid rgb(var(--mood-rgb)/.7);outline-offset:1px}
+.seg{display:flex;gap:3px;padding:3px;border:1px solid var(--line);border-radius:11px;background:var(--panel-2)}
+.seg button{flex:1;min-width:0;padding:9px 6px;border:0;border-radius:8px;background:transparent;font:600 13px/1.1 var(--f-body);color:var(--muted);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--text);color:var(--ink)}
+.seg button small{display:block;margin-top:3px;font:600 11px/1 var(--f-mono);opacity:.75}
+.btn{padding:11px 16px;border:1px solid var(--line);border-radius:11px;background:var(--panel-2);font:600 14px/1 var(--f-body);color:var(--text)}
+.btn.sm{padding:8px 12px;font-size:13px}
+.btn.primary{background:var(--text);border-color:var(--text);color:var(--ink)}
+.btn[data-armed]{color:var(--sell);border-color:rgb(var(--sell-rgb)/.6)}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;padding:3px 7px;border:1px solid var(--line-2);border-radius:99px;font:600 10px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.chip.mh{color:var(--sell);border-color:rgb(var(--sell-rgb)/.45)}
+.chip.me{color:var(--text)}
+.help{margin:0;font-size:13px;line-height:1.5;color:var(--muted)}
+.diag{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 16px;margin:0;font:500 13px/1.35 var(--f-mono)}
+.diag dt{color:var(--muted)}
+.diag dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.empty{margin:0;color:var(--muted);font-size:14px}
+
+/* Mon PnL */
+.onb{display:flex;flex-direction:column;gap:14px}
+.onb h2{margin:0;font:800 30px/1 var(--f-display);letter-spacing:.03em;text-transform:uppercase;text-wrap:balance}
+.onb p{margin:0;max-width:60ch;color:var(--muted);font-size:14.5px}
+.addr-row{display:flex;gap:8px;flex-wrap:wrap}
+.addr-row input{flex:1 1 220px}
+.pnl{display:flex;flex-direction:column;gap:16px}
+.wbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 12px}
+.wid{display:flex;flex-direction:column;gap:5px;min-width:0}
+.wid a{font:600 15px/1.2 var(--f-mono);text-decoration:none}
+.wright{display:flex;align-items:center;gap:10px}
+.wstate{display:flex;align-items:center;gap:7px;font:500 12px/1.3 var(--f-mono);color:var(--muted)}
+.wstate .dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--faint)}
+.wstate[data-live="1"] .dot{background:var(--buy);animation:pulse 1.8s ease-out infinite}
+.prog{flex-basis:100%;display:flex;flex-direction:column;gap:6px}
+.ptrack{height:6px;border-radius:99px;background:var(--panel-2);overflow:hidden}
+.pfill{height:100%;width:0;border-radius:99px;background:var(--text);transition:width .3s}
+.ptext{font:500 12px/1.3 var(--f-mono);color:var(--muted)}
+.ld{display:flex;flex-direction:column;gap:12px}
+.ld-num{font:800 34px/1 var(--f-display);letter-spacing:.02em}
+.usd{margin-top:8px;font:600 15px/1.2 var(--f-mono);color:var(--muted)}
+.hbreak{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:12px;font:500 12.5px/1.4 var(--f-mono);color:var(--muted)}
+.hbreak b{font-weight:600;color:var(--text)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.stat{background:rgb(16 23 34/.92);border:1px solid var(--line);border-radius:14px;padding:12px;min-width:0}
+.sv{margin-top:8px;font:800 24px/1 var(--f-display);letter-spacing:.02em}
+.ss{margin-top:6px;font:500 12px/1.3 var(--f-mono);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chart{position:relative;height:210px;touch-action:pan-y;-webkit-user-select:none;user-select:none;outline-offset:4px}
+.chart svg{position:absolute;inset:0;display:block;width:100%;height:100%;overflow:visible}
+.c-ax{font:500 10.5px/1 var(--f-mono);fill:var(--muted)}
+.c-grid{stroke:var(--line);stroke-width:1}
+.c-zero{stroke:var(--line-2);stroke-width:1}
+.c-line{fill:none;stroke:var(--text);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.c-up{fill:rgb(var(--buy-rgb)/.14)}
+.c-down{fill:rgb(var(--sell-rgb)/.14)}
+.c-cross{stroke:var(--muted);stroke-width:1}
+.c-dot{stroke:var(--panel);stroke-width:2}
+.chart-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 12px;margin-bottom:12px}
+.chart-head .card-title{margin:0}
+.chart-end{font:700 14px/1.2 var(--f-mono);font-variant-numeric:tabular-nums}
+.chart-empty{display:grid;place-items:center;height:100%;padding:0 16px;text-align:center;color:var(--muted);font-size:14px}
+.tip{position:absolute;top:0;left:0;z-index:2;min-width:150px;max-width:220px;padding:9px 11px;border:1px solid var(--line-2);border-radius:10px;background:#0c121a;box-shadow:0 10px 24px rgb(0 0 0/.45);pointer-events:none;font:500 12px/1.45 var(--f-mono);color:var(--muted)}
+.tip b{display:block;font:700 15px/1.25 var(--f-mono);color:var(--text)}
+.tip .nm{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.goal-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 16px}
+.gv{margin-top:6px;font:800 34px/1 var(--f-display);letter-spacing:.01em}
+.gside{text-align:right}
+.gp{margin-top:6px;font:600 15px/1.2 var(--f-mono)}
+.meter{height:10px;margin-top:14px;border-radius:99px;background:rgb(var(--buy-rgb)/.14);overflow:hidden}
+.meter div{height:100%;width:0;min-width:4px;border-radius:99px;background:var(--buy);transition:width .6s}
+.tbl-wrap{overflow-x:auto}
+.cats{width:100%;border-collapse:collapse;font:500 13px/1.3 var(--f-mono);font-variant-numeric:tabular-nums}
+.cats th{padding:0 8px 8px;text-align:right;font:600 10.5px/1.2 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.cats td{padding:10px 8px;border-top:1px solid var(--line);text-align:right;white-space:nowrap}
+.cats th:first-child,.cats td:first-child{padding-left:0;text-align:left}
+.cats td:first-child{white-space:normal;font:500 14px/1.3 var(--f-body);color:var(--text)}
+.cats th:last-child,.cats td:last-child{padding-right:0}
+.cats tr.sep td{border-top-color:var(--line-2)}
+.an-all{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.coins{list-style:none;margin:12px 0 0;padding:0}
+.coin{border-top:1px solid var(--line)}
+.coin:first-child{border-top:0}
+.coin-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;padding:12px 0;border:0;background:none;text-align:left}
+.c-main{display:block;min-width:0}
+.c-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 16px/1.25 var(--f-body)}
+.c-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-top:5px;font:500 12px/1.3 var(--f-mono);color:var(--muted)}
+.c-res{display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-variant-numeric:tabular-nums}
+.c-res b{font:700 16px/1.1 var(--f-mono)}
+.c-res span{font:500 12px/1 var(--f-mono);color:var(--muted)}
+.coin.win .c-res b{color:var(--buy)}
+.coin.loss .c-res b{color:var(--sell)}
+.coin-detail{display:flex;flex-direction:column;gap:14px;padding:0 0 16px}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px;margin:0}
+.facts div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.facts dt{font:600 10.5px/1.2 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.facts dd{margin:0;font:600 14px/1.25 var(--f-mono);font-variant-numeric:tabular-nums}
+.agent-box{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel-2)}
+.strip{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.strip i{display:block;width:12px;height:12px;border-radius:50%;background:var(--faint)}
+.strip i.ab{background:var(--buy)}
+.strip i.as{background:var(--sell)}
+.strip i.ot{width:10px;height:10px;background:transparent;border:2px solid var(--faint)}
+.strip b{display:inline-grid;place-items:center;min-width:22px;height:20px;padding:0 5px;border-radius:6px;font:700 11px/1 var(--f-mono)}
+.strip b.mb{border:1.5px solid var(--buy);color:var(--buy)}
+.strip b.ms{border:1.5px solid var(--sell);color:var(--sell)}
+.strip .more{font:500 12px/1 var(--f-mono);color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font:500 11.5px/1.3 var(--f-mono);color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:block;width:10px;height:10px;border-radius:50%}
+.an-sum{margin:0;font:500 13px/1.5 var(--f-mono);color:var(--text)}
+.an-sum.muted{color:var(--muted)}
+.links{display:flex;flex-wrap:wrap;gap:16px}
+.links a{font:600 13px/1 var(--f-body);color:var(--muted);text-underline-offset:3px}
+#exportText{margin-top:12px}
+
+/* Réglages */
+.switch{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
+.switch input{position:relative;flex:none;width:46px;height:28px;margin:0;border:1px solid var(--line);border-radius:99px;background:var(--panel-2);-webkit-appearance:none;appearance:none;transition:background-color .2s}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--muted);transition:transform .2s,background-color .2s}
+.switch input:checked{background:rgb(var(--buy-rgb)/.25);border-color:rgb(var(--buy-rgb)/.5)}
+.switch input:checked::after{transform:translateX(18px);background:var(--buy)}
+
+/* Messages */
+.toasts{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 112px);z-index:30;display:flex;flex-direction:column;align-items:center;gap:8px;padding-left:var(--gut-l);padding-right:var(--gut-r);pointer-events:none}
+.toast{max-width:520px;padding:10px 14px;border:1px solid var(--line);border-left:3px solid var(--calm);border-radius:12px;background:var(--panel-2);box-shadow:0 10px 30px rgb(0 0 0/.45);font:500 14px/1.35 var(--f-body);animation:tin .25s ease-out}
+.toast.buy{border-left-color:var(--buy)}
+.toast.sell{border-left-color:var(--sell)}
+@keyframes tin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:430px){.clock{display:none}.brand{font-size:20px}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body data-view="live">
+<div class="glow g-calm" aria-hidden="true"></div>
+<div class="glow g-buy" aria-hidden="true"></div>
+<div class="glow g-sell" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="in top-row">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <circle cx="16" cy="16" r="13"/><circle cx="16" cy="16" r="7" opacity=".5"/>
+        <path d="M16 16 26 8" stroke-linecap="round"/><circle cx="21.5" cy="11.5" r="2.2" fill="currentColor" stroke="none"/>
+      </svg>
+      <span>Mayhem Radar</span>
+    </div>
+    <div class="status" id="status" data-s="off" role="status">
+      <span class="dot"></span><span id="statusText">Démarrage</span><span class="clock" id="clock">--:--:--</span>
+    </div>
+  </div>
+  <nav class="in tabs" role="tablist" aria-label="Sections">
+    <button class="tab" type="button" role="tab" id="t-live" data-view="live" aria-controls="v-live" aria-selected="true">Live</button>
+    <button class="tab" type="button" role="tab" id="t-pnl" data-view="pnl" aria-controls="v-pnl" aria-selected="false">Mon PnL</button>
+    <button class="tab" type="button" role="tab" id="t-settings" data-view="settings" aria-controls="v-settings" aria-selected="false">Réglages</button>
+  </nav>
+</header>
+
+<main>
+  <section class="in view" id="v-live" role="tabpanel" aria-labelledby="t-live">
+    <div class="board">
+      <div class="eyebrow" id="winLabel">Demi-heure</div>
+      <h1 class="verdict"><span class="who">Mayhem</span><span id="vWord">En attente</span></h1>
+      <div class="subline" id="subline"><span>Connexion à la blockchain…</span></div>
+      <div class="clockbar">
+        <div class="track"><div class="fill" id="tFill"></div><div class="ticks"></div></div>
+        <div class="clockrow"><span id="tStart">--:--</span><span class="left" id="tLeft">reste --:--</span><span id="tEnd">--:--</span></div>
+      </div>
+      <p class="cover" id="cover" hidden></p>
+    </div>
+
+    <div class="card">
+      <div class="press-top">
+        <div class="pside l"><span class="lbl">Achats de l'agent</span><span class="pv" id="pBuy">0</span><span class="pn" id="pBuyN">0 achat</span></div>
+        <div class="pside r"><span class="lbl">Ventes de l'agent</span><span class="pv" id="pSell">0</span><span class="pn" id="pSellN">0 vente</span></div>
+      </div>
+      <div class="pbar empty" id="pBar"><div class="b" id="pB"></div><div class="s" id="pS"></div></div>
+      <p class="basis" id="basisNote"></p>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><div class="lbl">5 dernières min</div><div class="tv" id="r5">Calme</div><div class="ts" id="r5s">aucun trade</div></div>
+      <div class="tile"><div class="lbl">Rythme</div><div class="tv" id="rate">0/min</div><div class="ts">trades de l'agent</div></div>
+      <div class="tile"><div class="lbl">Dernier trade</div><div class="tv" id="lastAge">—</div><div class="ts" id="lastS">en attente</div></div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Demi-heures</h2>
+      <div class="hist-wrap" id="histWrap"><div class="hist" id="hist"></div></div>
+      <p class="hdetail" id="hDetail">Touche une colonne pour voir le détail d'une demi-heure.</p>
+    </div>
+  </section>
+
+  <section class="in view" id="v-pnl" role="tabpanel" aria-labelledby="t-pnl" hidden>
+    <form class="card onb" id="onb" autocomplete="off" novalidate hidden>
+      <div class="lbl">Suivi de ton wallet</div>
+      <h2>Ton vrai résultat, coin par coin</h2>
+      <p>Colle l'adresse publique de ton wallet pump.fun. Le site lit ton historique sur la blockchain, calcule ton PnL coin par coin et se met à jour tout seul à chaque nouveau trade.</p>
+      <div class="field"><label class="lbl" for="wAddr">Adresse du wallet</label>
+        <div class="addr-row"><input type="text" id="wAddr" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Colle l'adresse ici"><button class="btn primary" type="submit">Suivre ce wallet</button></div>
+      </div>
+      <p class="help">Dans l'app pump.fun, touche Dépôt puis copie ton adresse Solana. Ne colle jamais ta clé privée ni ta phrase secrète : le site n'en a pas besoin.</p>
+    </form>
+
+    <div class="pnl" id="pnlMain" hidden>
+      <div class="card wbar">
+        <div class="wid"><span class="lbl">Wallet suivi</span><a id="wLink" href="#" target="_blank" rel="noopener">—</a></div>
+        <div class="wright">
+          <span class="wstate" id="wState" data-live="0"><span class="dot"></span><span id="wStateText">—</span></span>
+          <button class="mini" type="button" id="wSync">Actualiser</button>
+        </div>
+        <div class="prog" id="wProg" hidden><div class="ptrack"><div class="pfill" id="wProgFill"></div></div><span class="ptext" id="wProgText"></span></div>
+      </div>
+
+      <div class="card ld" id="pnlLoading" hidden>
+        <div class="lbl">Première lecture de ton wallet</div>
+        <div class="ld-num" id="ldNum">…</div>
+        <div class="ptrack"><div class="pfill" id="ldFill"></div></div>
+        <p class="help">Avec le RPC public, la première lecture avance d'environ 4 transactions par seconde : compte quelques minutes pour un gros historique. Ensuite le site ne lit que les nouvelles transactions et se met à jour tout seul.</p>
+      </div>
+
+      <div class="seg" id="pPeriod" role="group" aria-label="Période">
+        <button type="button" data-v="day">Aujourd'hui</button><button type="button" data-v="7d">7 jours</button><button type="button" data-v="30d">30 jours</button><button type="button" data-v="all">Tout</button>
+      </div>
+
+      <div class="pnl" id="pnlBody">
+      <div class="card">
+        <div class="lbl" id="hLabel">Résultat net</div>
+        <div class="big" id="hNet">—</div>
+        <div class="usd" id="hUsd"></div>
+        <div class="hbreak" id="hBreak"></div>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="card">
+        <div class="chart-head"><h2 class="card-title">Résultat cumulé des trades</h2><span class="chart-end" id="chartEnd"></span></div>
+        <div class="chart" id="chart" tabindex="0" role="img" aria-label="Courbe du résultat cumulé de tes trades"></div>
+      </div>
+
+      <div class="card">
+        <div class="goal-top">
+          <div><div class="lbl">Solde du wallet</div><div class="gv" id="gBal">—</div></div>
+          <div class="gside"><div class="lbl" id="gGoal">Objectif</div><div class="gp" id="gPct">—</div></div>
+        </div>
+        <div class="meter" id="gMeter" role="progressbar" aria-label="Progression vers l'objectif" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="gFill"></div></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Par catégorie</h2>
+        <div class="tbl-wrap"><table class="cats" id="cats"></table></div>
+        <div class="an-all" id="anAll"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Mes trades</h2>
+        <div class="seg" id="pFilter" role="group" aria-label="Filtrer les trades">
+          <button type="button" data-v="all">Tous<small id="nAll">0</small></button><button type="button" data-v="win">Gagnants<small id="nWin">0</small></button><button type="button" data-v="loss">Perdants<small id="nLoss">0</small></button><button type="button" data-v="open">En cours<small id="nOpen">0</small></button>
+        </div>
+        <ul class="coins" id="coinList"></ul>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Hors trading</h2>
+        <dl class="diag" id="flows"></dl>
+      </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="in view" id="v-settings" role="tabpanel" aria-labelledby="t-settings" hidden>
+    <form class="card form" id="sWForm" autocomplete="off" novalidate>
+      <h2 class="card-title">Mon wallet</h2>
+      <div class="field"><label class="lbl" for="sWallet">Adresse publique</label><input type="text" id="sWallet" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Aucun wallet suivi"></div>
+      <div class="field"><label class="lbl" for="sGoal">Objectif (SOL)</label><input type="text" inputmode="decimal" id="sGoal" placeholder="1000"></div>
+      <p class="help">Uniquement l'adresse publique. Jamais de clé privée ni de phrase secrète.</p>
+      <div class="actions"><button class="btn primary" type="submit">Enregistrer</button><button class="btn" type="button" id="bResync">Relire tout l'historique</button></div>
+    </form>
+
+    <form class="card form" id="sForm" autocomplete="off" novalidate>
+      <h2 class="card-title">Connexion Solana</h2>
+      <div class="field"><label class="lbl" for="sRpc">URL du RPC</label><input type="url" id="sRpc" spellcheck="false" placeholder="https://api.mainnet-beta.solana.com"></div>
+      <p class="help">Le RPC public de Solana marche sans compte mais il est lent pour lire un gros historique et peut couper. Pour un site rapide et stable, crée une clé gratuite sur helius.dev et colle l'URL du type https://mainnet.helius-rpc.com/?api-key=… Elle reste dans ce navigateur.</p>
+      <div class="field"><label class="lbl" for="sWs">URL WebSocket (facultatif)</label><input type="url" id="sWs" spellcheck="false" placeholder="déduite de l'URL du RPC"></div>
+      <div class="field"><label class="lbl" for="sAgent">Wallet de l'agent Mayhem</label><input type="text" id="sAgent" spellcheck="false" autocapitalize="off"></div>
+      <p class="help">Adresse publiée par pump.fun dans sa doc Mayhem. Change-la seulement si pump.fun en publie une nouvelle.</p>
+      <div class="actions"><button class="btn primary" type="submit">Enregistrer et reconnecter</button><button class="btn" type="button" id="bRpcDefault">Revenir au RPC public</button></div>
+    </form>
+
+    <div class="card form">
+      <h2 class="card-title">Affichage</h2>
+      <div class="field"><span class="lbl">La couleur du Live se base sur</span>
+        <div class="seg" id="sBasis" role="group" aria-label="Base du verdict"><button type="button" data-v="volume">Volume en SOL</button><button type="button" data-v="count">Nombre de trades</button></div>
+      </div>
+      <label class="switch" for="sSound"><span>Son quand la couleur change</span><input type="checkbox" id="sSound"></label>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Diagnostic</h2>
+      <dl class="diag" id="diag"></dl>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Sauvegarde</h2>
+      <p class="help">Tes notes, les demi-heures du Live et les analyses de l'agent restent dans ce navigateur. Copie une sauvegarde pour les passer sur un autre appareil. L'historique du wallet, lui, se relit tout seul.</p>
+      <div class="actions" style="margin-top:12px"><button class="btn" type="button" id="bExport">Copier la sauvegarde</button><button class="btn" type="button" id="bImportToggle">Importer une sauvegarde</button></div>
+      <textarea id="exportText" rows="3" readonly hidden></textarea>
+      <div class="field" id="importBox" hidden style="margin-top:12px">
+        <textarea id="importText" rows="3" placeholder="Colle ici une sauvegarde copiée"></textarea>
+        <div><button class="btn" type="button" id="bImport">Remplacer mes notes et analyses</button></div>
+      </div>
+      <div class="actions" style="margin-top:12px"><button class="btn" type="button" id="bClearHist">Effacer les demi-heures</button></div>
+    </div>
+  </section>
+</main>
+
+<aside class="dock" id="dock" aria-label="Terminal des trades de l'agent">
+  <div class="in dock-head">
+    <div class="dock-title"><span>Terminal</span><a id="agentLink" href="https://solscan.io/account/BwWK17cbHxwWBKZkUYvzxLcNQ1YVyaFezduWbtm2de6s" target="_blank" rel="noopener">BwWK…de6s</a></div>
+    <div class="dock-btns"><button class="mini" id="bPause" type="button" aria-pressed="false">Figer</button><button class="mini" id="bDock" type="button" aria-expanded="true" aria-label="Réduire le terminal">▾</button></div>
+  </div>
+  <ul class="in feed" id="feed"><li class="feed-empty">Les trades de l'agent s'afficheront ici, à la seconde. Ceux sur tes coins sont surlignés.</li></ul>
+</aside>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+(() => {
+"use strict";
+
+/* CORE:START — décodage des transactions pump.fun */
+const PUMP = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
+const PUMP_AMM = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA";
+const MAYHEM = "MAyhSmzXzV1pTf7LsNkrNwkWKTo4ougAJ1PPg47MD4e";
+const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const WSOL = "So11111111111111111111111111111111111111112";
+const SYS = "11111111111111111111111111111111";
+const CBUDGET = "ComputeBudget111111111111111111111111111111";
+const D_TRADE = [189, 219, 127, 211, 78, 230, 97, 238];
+const D_CREATE = [27, 114, 169, 77, 222, 235, 99, 118];
+const D_COLLECT = [122, 2, 127, 1, 14, 191, 12, 175];
+const D_CASHBACK = [226, 214, 246, 33, 7, 242, 147, 229];
+const D_AMM_BUY = [103, 244, 82, 31, 44, 245, 119, 119];
+const D_AMM_SELL = [62, 47, 55, 10, 165, 3, 220, 42];
+const EVENT_IX_TAG = [228, 69, 165, 46, 81, 203, 154, 29];
+const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const B58_MAP = {};
+for (let i = 0; i < 58; i++) B58_MAP[B58[i]] = i;
+const UTF8 = new TextDecoder();
+const PROG_LINE = /^Program ([1-9A-HJ-NP-Za-km-z]{32,44}) (invoke \[\d+\]|success|failed)/;
+
+function b58encode(bytes) {
+  let zeros = 0;
+  while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
+  const digits = [];
+  for (let i = zeros; i < bytes.length; i++) {
+    let carry = bytes[i];
+    for (let j = 0; j < digits.length; j++) {
+      carry += digits[j] * 256;
+      digits[j] = carry % 58;
+      carry = Math.floor(carry / 58);
+    }
+    while (carry > 0) { digits.push(carry % 58); carry = Math.floor(carry / 58); }
+  }
+  let out = "1".repeat(zeros);
+  for (let k = digits.length - 1; k >= 0; k--) out += B58[digits[k]];
+  return out;
+}
+
+function b58decode(str) {
+  let zeros = 0;
+  while (zeros < str.length && str[zeros] === "1") zeros++;
+  const bytes = [];
+  for (let i = zeros; i < str.length; i++) {
+    let carry = B58_MAP[str[i]];
+    if (carry === undefined) throw new Error("base58 invalide");
+    for (let j = 0; j < bytes.length; j++) {
+      carry += bytes[j] * 58;
+      bytes[j] = carry & 255;
+      carry >>= 8;
+    }
+    while (carry > 0) { bytes.push(carry & 255); carry >>= 8; }
+  }
+  const out = new Uint8Array(zeros + bytes.length);
+  for (let k = 0; k < bytes.length; k++) out[out.length - 1 - k] = bytes[k];
+  return out;
+}
+
+function b64bytes(s) {
+  const bin = atob(s);
+  const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+
+function hasPrefix(u8, off, pre) {
+  if (u8.length < off + pre.length) return false;
+  for (let i = 0; i < pre.length; i++) if (u8[off + i] !== pre[i]) return false;
+  return true;
+}
+
+class Reader {
+  constructor(u8, off) { this.u = u8; this.o = off || 0; this.dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength); }
+  need(n) { if (n < 0 || this.o + n > this.u.length) throw new RangeError("fin des données"); }
+  skip(n) { this.need(n); this.o += n; }
+  bool() { this.need(1); return this.u[this.o++] !== 0; }
+  u32() { this.need(4); const v = this.dv.getUint32(this.o, true); this.o += 4; return v; }
+  u64() { this.need(8); const v = this.dv.getBigUint64(this.o, true); this.o += 8; return v; }
+  i64() { this.need(8); const v = this.dv.getBigInt64(this.o, true); this.o += 8; return v; }
+  pk() { this.need(32); const v = b58encode(this.u.subarray(this.o, this.o + 32)); this.o += 32; return v; }
+  str() { const n = this.u32(); if (n > 2048) throw new RangeError("chaîne trop longue"); this.need(n); const v = UTF8.decode(this.u.subarray(this.o, this.o + n)); this.o += n; return v; }
+}
+
+/* TradeEvent du programme pump (IDL officiel pump-public-docs) */
+function decodePumpTrade(u8, off) {
+  const r = new Reader(u8, off);
+  const ev = { type: "trade", kind: "curve", mint: r.pk(), sol: r.u64(), tok: r.u64(), isBuy: r.bool(), user: r.pk(), ts: Number(r.i64()) };
+  try {
+    r.skip(32 + 32 + 16 + 32 + 16 + 1 + 24 + 8); // réserves, frais, créateur, volumes
+    ev.ix = r.str();
+    ev.mayhem = r.bool();
+    r.skip(32); // cashback et buyback
+    const n = r.u32();
+    r.skip(n * 34); // shareholders
+    ev.quoteMint = r.pk();
+    ev.quoteAmt = r.u64();
+  } catch (e) { /* champs récents absents : on garde l'essentiel */ }
+  return ev;
+}
+
+/* CreateEvent : nom, symbole, créateur et mode Mayhem d'un coin */
+function decodeCreate(u8, off) {
+  const r = new Reader(u8, off);
+  const ev = { type: "create", name: r.str(), symbol: r.str() };
+  r.str(); // uri
+  ev.mint = r.pk();
+  r.skip(32); // bonding curve
+  ev.user = r.pk();
+  ev.creator = r.pk();
+  ev.ts = Number(r.i64());
+  try { r.skip(32 + 32); ev.mayhem = r.bool(); } catch (e) { /* ancien format */ }
+  return ev;
+}
+
+function decodeCollect(u8, off) { const r = new Reader(u8, off); return { type: "collect", ts: Number(r.i64()), creator: r.pk(), amount: r.u64() }; }
+function decodeCashback(u8, off) { const r = new Reader(u8, off); return { type: "cashback", user: r.pk(), amount: r.u64(), ts: Number(r.i64()) }; }
+
+/* BuyEvent / SellEvent de PumpSwap (coins déjà migrés) */
+function decodeAmm(u8, off, isBuy) {
+  const r = new Reader(u8, off);
+  const ts = Number(r.i64());
+  const v = [];
+  for (let i = 0; i < 13; i++) v.push(r.u64());
+  const pool = r.pk();
+  const user = r.pk();
+  return { type: "trade", kind: "amm", isBuy, ts, sol: v[12], tok: v[0], pool, user, mint: null };
+}
+
+function decodeEventBytes(u8, off, program) {
+  try {
+    if (program === PUMP || !program) {
+      if (hasPrefix(u8, off, D_TRADE)) return decodePumpTrade(u8, off + 8);
+      if (hasPrefix(u8, off, D_CREATE)) return decodeCreate(u8, off + 8);
+      if (hasPrefix(u8, off, D_COLLECT)) return decodeCollect(u8, off + 8);
+      if (hasPrefix(u8, off, D_CASHBACK)) return decodeCashback(u8, off + 8);
+    }
+    if (program === PUMP_AMM || !program) {
+      if (hasPrefix(u8, off, D_AMM_BUY)) return decodeAmm(u8, off + 8, true);
+      if (hasPrefix(u8, off, D_AMM_SELL)) return decodeAmm(u8, off + 8, false);
+    }
+  } catch (e) { /* événement tronqué */ }
+  return null;
+}
+
+/* Lit les logs d'une transaction en suivant la pile des programmes appelés */
+function parseLogs(logs) {
+  const events = [];
+  const stack = [];
+  const ixs = [];
+  const progs = new Set();
+  let side = null;
+  for (const line of logs || []) {
+    if (typeof line !== "string") continue;
+    const m = PROG_LINE.exec(line);
+    if (m) {
+      if (m[2].startsWith("invoke")) { stack.push(m[1]); progs.add(m[1]); } else stack.pop();
+      continue;
+    }
+    const top = stack[stack.length - 1];
+    if (line.startsWith("Program log: Instruction: ")) {
+      if (top === PUMP || top === PUMP_AMM) {
+        const name = line.slice(26).trim();
+        ixs.push(name);
+        if (/^buy/i.test(name)) side = "buy"; else if (/^sell/i.test(name)) side = "sell";
+      }
+      continue;
+    }
+    if (line.startsWith("Program data: ")) {
+      let u8;
+      try { u8 = b64bytes(line.slice(14).trim().split(" ")[0]); } catch (e) { continue; }
+      const ev = decodeEventBytes(u8, 0, top);
+      if (ev) events.push(ev);
+    }
+  }
+  return { events, side, ixs, progs };
+}
+
+function txKeys(tx) {
+  const msg = (tx && tx.transaction && tx.transaction.message) || {};
+  const loaded = (tx && tx.meta && tx.meta.loadedAddresses) || {};
+  return [].concat(msg.accountKeys || [], loaded.writable || [], loaded.readonly || []).map(k => typeof k === "string" ? k : (k && k.pubkey) || "");
+}
+
+/* Repli : événements émis par auto-appel (emit_cpi) dans les instructions internes */
+function parseInner(tx) {
+  const keys = txKeys(tx);
+  const out = [];
+  for (const group of (tx && tx.meta && tx.meta.innerInstructions) || []) {
+    for (const ix of group.instructions || []) {
+      const prog = keys[ix.programIdIndex];
+      if (prog !== PUMP && prog !== PUMP_AMM) continue;
+      let u8;
+      try { u8 = b58decode(ix.data || ""); } catch (e) { continue; }
+      if (!hasPrefix(u8, 0, EVENT_IX_TAG)) continue;
+      const ev = decodeEventBytes(u8, 8, prog);
+      if (ev) out.push(ev);
+    }
+  }
+  return out;
+}
+
+function amountOf(ev) {
+  if (ev.quoteMint === USDC) return { amt: Number(ev.quoteAmt || 0n) / 1e6, unit: "USDC" };
+  let lamports = ev.sol || 0n;
+  if (lamports === 0n && ev.quoteAmt) lamports = ev.quoteAmt;
+  return { amt: Number(lamports) / 1e9, unit: "SOL" };
+}
+function lamportsOf(ev) { const a = amountOf(ev); return a.unit === "SOL" ? Math.round(a.amt * 1e9) : 0; }
+
+/* Garde les trades faits par l'agent ; s'il passe par un compte intermédiaire, garde tout */
+function pickTrades(events, agent) {
+  const tr = events.filter(e => e.type === "trade");
+  const own = tr.filter(e => e.user === agent);
+  return own.length ? own : tr;
+}
+/* CORE:END */
+
+/* WCORE:START — lecture d'un wallet et calcul du PnL */
+const DUST = 0.002;
+
+function onlySystem(progs) {
+  for (const p of progs) if (p !== SYS && p !== CBUDGET && !p.startsWith("Memo")) return false;
+  return true;
+}
+
+/* Résume une transaction du wallet : variation de SOL, variations de tokens, événements pump.fun */
+function parseWalletTx(tx, wallet, agent) {
+  const meta = (tx && tx.meta) || {};
+  const keys = txKeys(tx);
+  const wi = keys.indexOf(wallet);
+  let d = 0;
+  if (wi >= 0 && Array.isArray(meta.preBalances) && Array.isArray(meta.postBalances)) d = (meta.postBalances[wi] || 0) - (meta.preBalances[wi] || 0);
+  const tok = new Map();
+  const acc = (b, sign) => {
+    if (!b || b.owner !== wallet || !b.mint || !b.uiTokenAmount) return;
+    const cur = tok.get(b.mint) || { d: 0, dec: b.uiTokenAmount.decimals || 0 };
+    cur.d += sign * Number(b.uiTokenAmount.amount || 0);
+    tok.set(b.mint, cur);
+  };
+  for (const b of meta.preTokenBalances || []) acc(b, -1);
+  for (const b of meta.postTokenBalances || []) acc(b, 1);
+  const m = [];
+  for (const [mint, v] of tok) {
+    if (!v.d) continue;
+    if (mint === WSOL) d += v.d; else m.push([mint, v.d, v.dec]);
+  }
+  const lg = parseLogs(meta.logMessages);
+  let events = lg.events;
+  if (!events.length) events = parseInner(tx);
+  const viaMayhem = lg.progs.has(MAYHEM);
+  const tr = [], cr = [], ag = [];
+  for (const ev of events) {
+    if (ev.type === "trade") {
+      if (ev.user === wallet) tr.push([ev.mint || "", ev.isBuy ? 1 : 0, lamportsOf(ev), ev.mayhem ? 1 : 0]);
+      else if (ev.mint && (ev.user === agent || viaMayhem)) ag.push([ev.mint, ev.isBuy ? 1 : 0, lamportsOf(ev)]);
+    } else if (ev.type === "create" && ev.mint && (ev.user === wallet || ev.creator === wallet)) {
+      cr.push([ev.mint, ev.name || "", ev.symbol || "", ev.mayhem ? 1 : 0]);
+    }
+  }
+  const ixs = lg.ixs.join(" ");
+  let k;
+  if (meta.err) k = "failed";
+  else if (m.length) k = "trade";
+  else if (cr.length) k = "create";
+  else if (/CollectCreatorFee|CollectCoinCreatorFee|DistributeCreatorFees/i.test(ixs) || events.some(e => e.type === "collect")) k = "fee";
+  else if (/ClaimCashback/i.test(ixs) || events.some(e => e.type === "cashback")) k = "cashback";
+  else if (ag.length || viaMayhem) k = "trigger";
+  else if (d !== 0 && onlySystem(lg.progs)) k = "transfer";
+  else k = "other";
+  const rec = { d, k };
+  if (m.length) rec.m = m;
+  if (tr.length) rec.tr = tr;
+  if (cr.length) rec.cr = cr;
+  if (ag.length) rec.ag = ag;
+  if (k === "trigger") {
+    const x = keys.filter(a => a.length >= 32 && a.endsWith("pump"));
+    if (x.length) rec.x = x.slice(0, 4);
+  }
+  return rec;
+}
+
+function newCoin(mint) {
+  return { mint, name: "", symbol: "", created: false, mayhem: false, qty: 0, maxQty: 0, cost: 0, invested: 0, received: 0, realized: 0, nBuy: 0, nSell: 0, openedAt: 0, lastAt: 0, closedAt: 0, triggers: 0, agB: 0, agS: 0, agBL: 0, agSL: 0, sigs: [] };
+}
+
+/* Rejoue l'historique dans l'ordre et calcule le résultat de chaque coin (coût moyen) */
+function buildPortfolio(recs) {
+  const list = recs.filter(r => r && typeof r.d === "number").sort((a, b) => ((a.sl || 0) - (b.sl || 0)) || ((a.t || 0) - (b.t || 0)) || ((a.o || 0) - (b.o || 0)));
+  const coins = new Map();
+  const flows = [];
+  const get = mint => { let c = coins.get(mint); if (!c) { c = newCoin(mint); coins.set(mint, c); } return c; };
+  for (const r of list) {
+    const t = r.t || 0;
+    for (const [mint, name, symbol, mm] of r.cr || []) {
+      const c = get(mint);
+      c.created = true;
+      if (name) c.name = name;
+      if (symbol) c.symbol = symbol;
+      if (mm) c.mayhem = true;
+      if (!c.openedAt) c.openedAt = t;
+    }
+    if (r.k === "trade") {
+      const parts = r.m || [];
+      let shares;
+      if (parts.length <= 1) shares = [r.d];
+      else {
+        const w = parts.map(p => { const e = (r.tr || []).find(x => x[0] === p[0]); return e ? e[2] : 0; });
+        const tot = w.reduce((a, b) => a + b, 0);
+        shares = tot > 0 ? w.map(x => r.d * x / tot) : parts.map(() => r.d / parts.length);
+      }
+      parts.forEach((p, i) => {
+        const c = get(p[0]);
+        const delta = p[1], s = shares[i];
+        if (!c.openedAt) c.openedAt = t;
+        c.lastAt = t;
+        c.sigs.push(r.s);
+        if (delta > 0) {
+          c.qty += delta;
+          if (c.qty > c.maxQty) c.maxQty = c.qty;
+          c.cost -= s;
+          if (s < 0) c.invested -= s;
+          c.nBuy++;
+          c.closedAt = 0;
+        } else {
+          const sold = -delta;
+          const f = c.qty > 0 ? Math.min(1, sold / c.qty) : 1;
+          const out = c.cost * f;
+          c.realized += s - out;
+          c.cost -= out;
+          c.qty = Math.max(0, c.qty - sold);
+          if (s > 0) c.received += s;
+          c.nSell++;
+          if (c.qty <= c.maxQty * DUST) c.closedAt = t;
+        }
+      });
+    } else if (r.k === "create") {
+      const n = (r.cr || []).length || 1;
+      for (const [mint] of r.cr || []) {
+        const c = get(mint);
+        c.cost -= r.d / n;
+        if (r.d < 0) c.invested -= r.d / n;
+        c.lastAt = t;
+        c.sigs.push(r.s);
+      }
+    } else if (r.k === "trigger") {
+      const cand = (r.x || []).concat((r.ag || []).map(a => a[0]));
+      const hit = cand.find(a => coins.has(a));
+      if (hit) { const c = coins.get(hit); c.triggers++; c.realized += r.d; if (t > c.lastAt) c.lastAt = t; }
+      else flows.push({ t, k: "other", d: r.d });
+    } else {
+      flows.push({ t, k: r.k, d: r.d });
+    }
+    for (const e of r.tr || []) if (e[0] && e[3] && coins.has(e[0])) coins.get(e[0]).mayhem = true;
+    for (const [mint, isBuy, l] of r.ag || []) {
+      if (!coins.has(mint)) continue;
+      const c = coins.get(mint);
+      if (isBuy) { c.agB++; c.agBL += l; } else { c.agS++; c.agSL += l; }
+    }
+  }
+  const out = [];
+  for (const c of coins.values()) {
+    const open = c.qty > 0 && c.qty > c.maxQty * DUST;
+    if (open) {
+      c.status = "open";
+      c.closedAt = 0;
+      if (c.nSell === 0 && c.invested < 100000) continue; // jeton reçu sans rien payer (spam)
+    } else {
+      c.status = "closed";
+      if (c.cost) { c.realized -= c.cost; c.cost = 0; } // reste de poussière : perdu
+      if (!c.closedAt) c.closedAt = c.lastAt || c.openedAt;
+    }
+    c.pct = c.invested > 0 ? c.realized / c.invested : 0;
+    out.push(c);
+  }
+  return { coins: out, flows };
+}
+/* WCORE:END */
+
+/* ---------- Réglages et stockage ---------- */
+const AGENT = "BwWK17cbHxwWBKZkUYvzxLcNQ1YVyaFezduWbtm2de6s";
+const PUBLIC_RPC = "https://api.mainnet-beta.solana.com";
+const HALF = 30 * 60 * 1000;
+const KEYS = { settings: "mr_settings_v1", hist: "mr_history_v1", win: "mr_window_v1", ui: "mr_ui_v1", notes: "mr_notes_v1", an: "mr_analyses_v1", names: "mr_names_v1", price: "mr_price_v1" };
+const DEFAULTS = { rpc: PUBLIC_RPC, ws: "", agent: AGENT, basis: "volume", sound: false, wallet: "", goal: 1000 };
+const PING = JSON.stringify({ jsonrpc: "2.0", id: 99, method: "ping" });
+const TXOPT = { encoding: "json", maxSupportedTransactionVersion: 0, commitment: "confirmed" };
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+};
+const asObj = v => v && typeof v === "object" && !Array.isArray(v) ? v : {};
+
+let S = Object.assign({}, DEFAULTS, asObj(store.get(KEYS.settings, {})));
+const UI = Object.assign({ period: "all", filter: "all" }, asObj(store.get(KEYS.ui, {})));
+UI.expanded = new Set();
+let NOTES = asObj(store.get(KEYS.notes, {}));
+let AN = asObj(store.get(KEYS.an, {}));
+
+function endpoints() {
+  const http = (S.rpc || PUBLIC_RPC).trim();
+  const ws = (S.ws || "").trim() || http.replace(/^https:/i, "wss:").replace(/^http:/i, "ws:");
+  return { http, ws };
+}
+function isAddress(a) {
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a || "")) return false;
+  try { return b58decode(a).length === 32; } catch (e) { return false; }
+}
+
+/* ---------- Formats ---------- */
+const NF = {};
+const nf = d => NF[d] || (NF[d] = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d }));
+const sgn = x => x > 0 ? "+" : x < 0 ? "−" : "";
+function sol(x) { const a = Math.abs(x); return nf(a >= 100 ? 0 : a >= 10 ? 1 : a >= 1 ? 2 : 3).format(a); }
+const solS = x => sgn(x) + sol(x);
+function lam(l) { const a = Math.abs(l) / 1e9; return nf(a >= 100 ? 1 : a >= 1 ? 2 : a >= 0.1 ? 3 : a >= 0.001 || a === 0 ? 4 : 6).format(a); }
+function lamS(l) { const txt = lam(l); return (/[1-9]/.test(txt) ? sgn(l) : "") + txt; }
+function pctS(p) { const v = p * 100; return sgn(v) + nf(Math.abs(v) >= 100 ? 0 : 1).format(Math.abs(v)) + " %"; }
+function usdTxt(l, signed) {
+  if (!W.price) return "";
+  const u = l / 1e9 * W.price;
+  return "≈ " + (signed ? sgn(u) : "") + nf(2).format(Math.abs(u)) + " $";
+}
+const pad = n => String(n).padStart(2, "0");
+const hm = ms => { const d = new Date(ms); return pad(d.getHours()) + ":" + pad(d.getMinutes()); };
+const hms = ms => hm(ms) + ":" + pad(new Date(ms).getSeconds());
+const DAYF = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
+function dayHm(sec) { if (!sec) return "—"; const d = new Date(sec * 1000); return DAYF.format(d) + " · " + hm(d.getTime()); }
+function dur(sec) {
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 60) return Math.max(1, sec) + " s";
+  const m = Math.floor(sec / 60);
+  if (m < 60) return m + " min " + pad(sec % 60);
+  const h = Math.floor(m / 60);
+  return h < 48 ? h + " h " + pad(m % 60) : Math.round(h / 24) + " j";
+}
+const short = a => a ? a.slice(0, 4) + "…" + a.slice(-4) : "—";
+const plural = (n, w) => n + " " + w + (n > 1 ? "s" : "");
+function ago(ms) { const s = Math.max(0, Math.round(ms / 1000)); if (s < 60) return s + " s"; const m = Math.round(s / 60); return m < 60 ? m + " min" : Math.round(m / 60) + " h"; }
+const $ = id => document.getElementById(id);
+const coinLabel = c => c.name || (c.symbol ? "$" + c.symbol : short(c.mint));
+
+function el(tag, props, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v);
+  }
+  for (const c of kids) if (c != null && c !== false) n.append(c);
+  return n;
+}
+const SVGNS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs, text) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) n.setAttribute(k, String(v));
+  if (text != null) n.textContent = text;
+  return n;
+}
+
+function toast(text, kind) {
+  const t = el("div", { class: "toast " + (kind || ""), text });
+  $("toasts").append(t);
+  setTimeout(() => t.remove(), 4200);
+}
+
+/* Bouton à deux temps : premier appui = demande de confirmation */
+function armed(btn, label, action) {
+  if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = btn.dataset.label; action(); return; }
+  btn.dataset.label = btn.textContent;
+  btn.dataset.armed = "1";
+  btn.textContent = label;
+  setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = btn.dataset.label; } }, 4500);
+}
+
+/* ---------- Appels RPC : file d'attente avec limite de débit ---------- */
+const R = { qHi: [], qLo: [], inflight: 0, last: 0, paused: 0, calls: 0, errors: 0, timer: 0 };
+function rpcGap() { try { return new URL(endpoints().http).hostname === "api.mainnet-beta.solana.com" ? 270 : 110; } catch (e) { return 270; } }
+function rpc(method, params, prio, tag) {
+  return new Promise((resolve, reject) => {
+    const job = { method, params, resolve, reject, tries: 0, hi: prio === "high", tag: tag || "" };
+    (job.hi ? R.qHi : R.qLo).push(job);
+    pumpQ();
+  });
+}
+function cancelTag(tag) {
+  for (const q of [R.qHi, R.qLo]) {
+    for (let i = q.length - 1; i >= 0; i--) {
+      if (q[i].tag !== tag) continue;
+      const job = q.splice(i, 1)[0];
+      const e = new Error("annulé");
+      e.cancelled = true;
+      job.reject(e);
+    }
+  }
+}
+function pumpQ() {
+  clearTimeout(R.timer);
+  while (R.inflight < 3 && (R.qHi.length || R.qLo.length)) {
+    const now = Date.now();
+    const wait = Math.max(R.paused - now, R.last + rpcGap() - now);
+    if (wait > 0) { R.timer = setTimeout(pumpQ, wait); return; }
+    const job = R.qHi.length ? R.qHi.shift() : R.qLo.shift();
+    R.last = now;
+    R.inflight++;
+    R.calls++;
+    runJob(job).finally(() => { R.inflight--; pumpQ(); });
+  }
+}
+function retryJob(job) {
+  job.tries++;
+  R.paused = Date.now() + 1200 * job.tries;
+  (job.hi ? R.qHi : R.qLo).unshift(job);
+}
+async function runJob(job) {
+  let j;
+  try {
+    const res = await fetch(endpoints().http, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: job.method, params: job.params })
+    });
+    if (res.status === 429 || res.status >= 500) {
+      if (job.tries < 5) { retryJob(job); return; }
+      throw new Error("le RPC répond " + res.status);
+    }
+    j = await res.json();
+  } catch (e) {
+    if (job.tries < 3 && !String(e && e.message).startsWith("le RPC")) { retryJob(job); return; }
+    R.errors++;
+    job.reject(e);
+    return;
+  }
+  if (j && j.error) {
+    const msg = String(j.error.message || "erreur RPC");
+    if ((j.error.code === 429 || j.error.code === -32429 || /rate limit|too many/i.test(msg)) && job.tries < 5) { retryJob(job); return; }
+    if (j.error.code !== -32601) R.errors++;
+    const err = new Error(msg);
+    err.code = j.error.code;
+    job.reject(err);
+    return;
+  }
+  job.resolve(j ? j.result : null);
+}
+
+/* ---------- Demi-heures de l'agent ---------- */
+const WORD = { buy: "Achète", sell: "Vend", even: "Équilibre", wait: "En attente" };
+
+function boundsAt(ms) {
+  const d = new Date(ms);
+  d.setMinutes(d.getMinutes() < 30 ? 0 : 30, 0, 0);
+  return { start: d.getTime(), end: d.getTime() + HALF };
+}
+function newWindow(ms) { const b = boundsAt(ms); return { start: b.start, end: b.end, buyN: 0, sellN: 0, buySol: 0, sellSol: 0, measured: 0, since: 0 }; }
+
+function weights(w) {
+  if (S.basis === "count" || w.buySol + w.sellSol === 0) return { b: w.buyN, s: w.sellN };
+  return { b: w.buySol, s: w.sellSol };
+}
+function verdictOf(w) {
+  if (!w || w.buyN + w.sellN < 3) return "wait";
+  const { b, s } = weights(w);
+  if (Math.abs(b - s) < 1e-9) return "even";
+  return b > s ? "buy" : "sell";
+}
+
+function archive(w, silent) {
+  if (w.buyN + w.sellN === 0 && w.measured < 60) return;
+  const rec = { start: w.start, end: w.end, buyN: w.buyN, sellN: w.sellN, buySol: +w.buySol.toFixed(4), sellSol: +w.sellSol.toFixed(4), cover: Math.min(1, w.measured / 1800) };
+  hist = [rec].concat(hist.filter(h => h.start !== w.start)).slice(0, 336);
+  store.set(KEYS.hist, hist);
+  if (!silent) {
+    const v = verdictOf(rec);
+    toast(hm(rec.start) + "–" + hm(rec.end) + " terminée : Mayhem " + WORD[v].toLowerCase() + (rec.buyN + rec.sellN ? " (" + solS(rec.buySol - rec.sellSol) + " SOL net)" : ""), v === "buy" || v === "sell" ? v : "");
+  }
+}
+
+let hist = store.get(KEYS.hist, []);
+if (!Array.isArray(hist)) hist = [];
+let win = (() => {
+  const w = store.get(KEYS.win, null);
+  const now = Date.now();
+  if (w && typeof w.start === "number" && typeof w.end === "number") {
+    if (now < w.end && now >= w.start) return w;
+    archive(w, true);
+  }
+  return newWindow(now);
+})();
+const persistWin = () => store.set(KEYS.win, win);
+
+/* Humeur de l'agent à un instant donné (si le Live était ouvert à ce moment-là) */
+function moodAt(sec) {
+  const ms = sec * 1000;
+  if (ms >= win.start && ms < win.end) return verdictOf(win);
+  const h = hist.find(x => ms >= x.start && ms < x.end);
+  return h ? verdictOf(h) : null;
+}
+
+/* ---------- État du wallet ---------- */
+const W = { addr: "", data: null, port: null, syncing: false, gen: 0, prog: { done: 0, total: 0, phase: "" }, balance: null, live: false, seq: Date.now(), seen: new Set(), mints: new Set(), names: asObj(store.get(KEYS.names, {})), noDas: false, price: 0, analyzing: "", anAll: null, lastSync: 0 };
+
+/* ---------- Réception des trades de l'agent ---------- */
+const recent = [];
+const seen = new Map();
+const diag = { notif: 0, trades: 0, fetched: 0, unread: 0, errors: 0, users: new Map(), lastMsg: 0, wNotif: 0, wErr: 0 };
+let lastTradeAt = 0;
+
+function firstTime(sig) { if (seen.has(sig)) return false; seen.set(sig, Date.now()); return true; }
+setInterval(() => { const cut = Date.now() - 20 * 60000; for (const [k, t] of seen) if (t < cut) seen.delete(k); }, 60000);
+
+function addTo(w, side, amt, unit) {
+  if (side === "buy") { w.buyN++; if (unit === "SOL") w.buySol += amt; }
+  else { w.sellN++; if (unit === "SOL") w.sellSol += amt; }
+}
+
+function ingest(ev, sig) {
+  const { amt, unit } = amountOf(ev);
+  const now = Date.now();
+  const t = ev.ts && Math.abs(ev.ts * 1000 - now) < 180000 ? ev.ts * 1000 : now;
+  const side = ev.isBuy ? "buy" : "sell";
+  if (t >= win.start && t < win.end) addTo(win, side, amt, unit);
+  else if (hist[0] && t >= hist[0].start && t < hist[0].end) { addTo(hist[0], side, amt, unit); store.set(KEYS.hist, hist); }
+  recent.push({ t, side, amt: unit === "SOL" ? amt : 0 });
+  lastTradeAt = now;
+  diag.trades++;
+  if (ev.user) diag.users.set(ev.user, (diag.users.get(ev.user) || 0) + 1);
+  const mine = !!(ev.mint && W.mints.has(ev.mint));
+  if (mine) addLiveAgent(ev.mint, t, ev.isBuy, unit === "SOL" ? Math.round(amt * 1e9) : 0);
+  feedPush({ t, side, amt, unit, mint: ev.mint, pool: ev.pool, sig, mine });
+  scheduleRender();
+}
+function ingestSideOnly(sig, side) { ingest({ isBuy: side === "buy", sol: 0n, ts: 0, user: null, mint: null, pool: null }, sig); }
+
+function onLogs(v) {
+  diag.notif++;
+  if (!v || v.err || !v.signature || !firstTime(v.signature)) return;
+  const { events, side } = parseLogs(v.logs);
+  const trades = pickTrades(events, S.agent);
+  if (trades.length) { for (const ev of trades) ingest(ev, v.signature); return; }
+  if (side) queueFetch(v.signature, side, 0);
+}
+
+/* Relecture d'une transaction quand ses logs ne suffisent pas */
+function queueFetch(sig, side, tries) {
+  if (R.qHi.length > 40) { ingestSideOnly(sig, side); return; }
+  diag.fetched++;
+  rpc("getTransaction", [sig, TXOPT], "high").then(tx => {
+    if (!tx) {
+      if (tries < 1) setTimeout(() => queueFetch(sig, side, tries + 1), 1500);
+      else ingestSideOnly(sig, side);
+      return;
+    }
+    if (tx.meta && tx.meta.err) return;
+    let events = parseLogs(tx.meta && tx.meta.logMessages).events;
+    if (!events.some(e => e.type === "trade")) events = parseInner(tx);
+    const trades = pickTrades(events, S.agent);
+    if (trades.length) { for (const ev of trades) ingest(ev, sig); return; }
+    diag.unread++;
+    ingestSideOnly(sig, side);
+  }, () => { diag.errors++; ingestSideOnly(sig, side); });
+}
+
+/* ---------- WebSocket : agent + wallet ---------- */
+let ws = null, wsState = "off", retry = 0, reconnectTimer = 0, lastMsg = 0;
+const SUB = { agent: null, wallet: null };
+const STATUS_TEXT = { off: "Arrêté", connecting: "Connexion", live: "En direct", down: "Reconnexion", error: "Refusé" };
+
+function setStatus(s) {
+  wsState = s;
+  $("status").dataset.s = s;
+  $("statusText").textContent = STATUS_TEXT[s];
+  scheduleRender();
+}
+
+function connect() {
+  clearTimeout(reconnectTimer);
+  if (ws) { ws.onclose = null; ws.onmessage = null; try { ws.close(); } catch (e) { /* déjà fermé */ } }
+  SUB.agent = SUB.wallet = null;
+  W.live = false;
+  setStatus("connecting");
+  renderWalletBar();
+  let sock;
+  try { sock = new WebSocket(endpoints().ws); }
+  catch (e) { ws = null; setStatus("error"); toast("URL WebSocket invalide. Vérifie les réglages.", "sell"); return; }
+  ws = sock;
+  sock.onopen = () => {
+    lastMsg = Date.now();
+    sock.send(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "logsSubscribe", params: [{ mentions: [S.agent] }, { commitment: "confirmed" }] }));
+    if (W.addr) sock.send(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "logsSubscribe", params: [{ mentions: [W.addr] }, { commitment: "confirmed" }] }));
+  };
+  sock.onmessage = e => {
+    lastMsg = diag.lastMsg = Date.now();
+    let msg;
+    try { msg = JSON.parse(e.data); } catch (err) { return; }
+    if (msg.id === 1) {
+      if (msg.error) {
+        setStatus("error");
+        toast("Le RPC refuse l'abonnement : " + (msg.error.message || "erreur") + ". Nouvel essai dans 30 s, ou mets une clé Helius dans Réglages.", "sell");
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(() => { retry = 0; connect(); }, 30000);
+        return;
+      }
+      SUB.agent = msg.result;
+      retry = 0;
+      if (!win.since) win.since = Date.now();
+      setStatus("live");
+      return;
+    }
+    if (msg.id === 2) {
+      if (!msg.error) { SUB.wallet = msg.result; W.live = true; walletCatchUp(); }
+      renderWalletBar();
+      return;
+    }
+    if (msg.method === "logsNotification") {
+      const p = msg.params || {};
+      const res = p.result || {};
+      if (SUB.wallet !== null && p.subscription === SUB.wallet) onWalletLogs(res.value, res.context && res.context.slot);
+      else onLogs(res.value);
+    }
+  };
+  sock.onclose = () => { if (ws === sock && wsState !== "error") scheduleReconnect(); };
+  sock.onerror = () => { /* onclose suit */ };
+}
+
+function scheduleReconnect() {
+  const delays = [1000, 2000, 4000, 8000, 15000, 30000];
+  const d = delays[Math.min(retry, delays.length - 1)];
+  retry++;
+  W.live = false;
+  setStatus("down");
+  renderWalletBar();
+  clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(connect, d);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") { persistWin(); return; }
+  if (!ws || ws.readyState >= 2) { retry = 0; connect(); }
+  if (W.addr && Date.now() - W.lastSync > 60000) syncWallet(false);
+});
+window.addEventListener("online", () => { retry = 0; connect(); });
+window.addEventListener("pagehide", persistWin);
+
+/* ---------- Rendu du Live ---------- */
+let mood = "wait", renderQueued = false, selectedStart = null;
+const THEME_META = document.querySelector('meta[name="theme-color"]');
+const THEME_COLORS = { buy: "#0b1a14", sell: "#1d0c10", wait: "#0a0e14" };
+
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; renderVerdict(); renderLiveColumn(); flushFeed(); });
+}
+
+function renderVerdict() {
+  const v = verdictOf(win);
+  const m = v === "buy" || v === "sell" ? v : "wait";
+  if (m !== mood) {
+    mood = m;
+    document.documentElement.dataset.mood = m;
+    THEME_META.setAttribute("content", THEME_COLORS[m]);
+    if (m !== "wait") cue(m);
+  }
+  $("vWord").textContent = WORD[v];
+  $("winLabel").textContent = "Demi-heure " + hm(win.start) + " → " + hm(win.end);
+
+  const n = win.buyN + win.sellN;
+  const sub = $("subline");
+  sub.replaceChildren();
+  if (n === 0) {
+    const txt = wsState === "live" ? "Aucun trade de l'agent depuis le début de la mesure."
+      : wsState === "error" || retry > 3 ? "Connexion impossible pour l'instant. Essaie un autre RPC dans Réglages."
+      : "Connexion à la blockchain…";
+    sub.append(el("span", { text: txt }));
+  } else {
+    sub.append(el("b", { text: solS(win.buySol - win.sellSol) + " SOL net" }), el("span", { text: plural(n, "trade") }));
+    if (n < 3) sub.append(el("span", { text: "verdict dès 3 trades" }));
+  }
+
+  $("pBuy").replaceChildren(sol(win.buySol), el("small", { text: "SOL" }));
+  $("pSell").replaceChildren(sol(win.sellSol), el("small", { text: "SOL" }));
+  $("pBuyN").textContent = plural(win.buyN, "achat");
+  $("pSellN").textContent = plural(win.sellN, "vente");
+  const { b, s } = weights(win);
+  $("pBar").classList.toggle("empty", b + s === 0);
+  $("pB").style.flexGrow = b + s ? String(b) : "1";
+  $("pS").style.flexGrow = b + s ? String(s) : "1";
+  $("basisNote").textContent = S.basis === "count"
+    ? "La couleur suit le nombre de trades de l'agent sur la demi-heure."
+    : "La couleur suit le volume en SOL acheté ou vendu par l'agent sur la demi-heure.";
+
+  const cover = $("cover");
+  const now = Date.now();
+  const elapsed = (now - win.start) / 1000;
+  const share = elapsed > 0 ? win.measured / elapsed : 1;
+  if (wsState === "live" && elapsed > 90 && share < 0.92) {
+    cover.hidden = false;
+    cover.textContent = win.since && win.since - win.start > 60000
+      ? "Mesure commencée à " + hm(win.since) + " : le verdict ne couvre qu'une partie de la demi-heure."
+      : "Mesure interrompue par moments : " + Math.round(share * 100) + " % de la demi-heure couverte.";
+  } else cover.hidden = true;
+}
+
+function renderClock(now) {
+  $("clock").textContent = hms(now);
+  const p = Math.min(1, Math.max(0, (now - win.start) / HALF));
+  $("tFill").style.width = (p * 100).toFixed(2) + "%";
+  const left = Math.max(0, Math.round((win.end - now) / 1000));
+  $("tLeft").textContent = "reste " + pad(Math.floor(left / 60)) + ":" + pad(left % 60);
+  $("tStart").textContent = hm(win.start);
+  $("tEnd").textContent = hm(win.end);
+}
+
+function renderRecent(now) {
+  while (recent.length && now - recent[0].t > 10 * 60000) recent.shift();
+  let b5 = 0, s5 = 0, nb = 0, ns = 0, n60 = 0;
+  for (const r of recent) {
+    const age = now - r.t;
+    if (age <= 300000) { if (r.side === "buy") { b5 += r.amt; nb++; } else { s5 += r.amt; ns++; } }
+    if (age <= 60000) n60++;
+  }
+  const n5 = nb + ns;
+  const useCount = S.basis === "count" || b5 + s5 === 0;
+  const wb = useCount ? nb : b5, wsell = useCount ? ns : s5;
+  const r5 = $("r5");
+  r5.textContent = n5 === 0 ? "Calme" : wb > wsell ? "Acheteur" : wsell > wb ? "Vendeur" : "Égal";
+  r5.className = "tv " + (n5 && wb > wsell ? "buy" : n5 && wsell > wb ? "sell" : "");
+  $("r5s").textContent = n5 ? solS(b5 - s5) + " SOL · " + plural(n5, "trade") : "aucun trade";
+  $("rate").textContent = n60 + "/min";
+  $("lastAge").textContent = lastTradeAt ? ago(now - lastTradeAt) : "—";
+  $("lastS").textContent = lastTradeAt ? "à " + hms(lastTradeAt) : "en attente";
+}
+
+function histCol(w, live) {
+  const v = verdictOf(w);
+  const { b, s } = weights(w);
+  const strength = b + s ? Math.abs(b - s) / (b + s) : 0;
+  const h = Math.max(4, Math.round(strength * 88));
+  const n = w.buyN + w.sellN;
+  const cover = live ? 1 : (typeof w.cover === "number" ? w.cover : 1);
+  const cls = "hcol " + (v === "buy" || v === "sell" ? v : "calm") + (live ? " live" : "") + (cover < 0.8 ? " partial" : "");
+  return el("button", { class: cls, type: "button", "aria-pressed": selectedStart === w.start ? "true" : "false", "data-start": String(w.start), onclick: () => selectHist(w.start) },
+    el("span", { class: "hval", text: n ? solS(w.buySol - w.sellSol) : "" }),
+    el("span", { class: "hbox" }, el("span", { class: "hbar", style: "height:" + h + "px" })),
+    el("span", { class: "hlab", text: live ? "en cours" : hm(w.start) }));
+}
+
+function renderHistory() {
+  const box = $("hist");
+  const cols = hist.slice(0, 24).reverse().map(h => histCol(h, false));
+  cols.push(histCol(win, true));
+  box.replaceChildren(...cols);
+  const wrap = $("histWrap");
+  wrap.scrollLeft = wrap.scrollWidth;
+  if (selectedStart !== null) selectHist(selectedStart, true);
+}
+
+function renderLiveColumn() {
+  const box = $("hist");
+  const last = box.lastElementChild;
+  if (!last || Number(last.dataset.start) !== win.start) { renderHistory(); return; }
+  last.replaceWith(histCol(win, true));
+  if (selectedStart === win.start) detailFor(win, true);
+}
+
+function selectHist(start, keep) {
+  if (!keep && selectedStart === start) start = null;
+  selectedStart = start;
+  for (const c of $("hist").children) c.setAttribute("aria-pressed", Number(c.dataset.start) === start ? "true" : "false");
+  if (start === null) { $("hDetail").textContent = "Touche une colonne pour voir le détail d'une demi-heure."; return; }
+  const live = start === win.start;
+  const w = live ? win : hist.find(h => h.start === start);
+  if (w) detailFor(w, live);
+}
+
+function detailFor(w, live) {
+  const v = verdictOf(w);
+  const parts = [hm(w.start) + "–" + hm(w.end) + (live ? " (en cours)" : ""), "Mayhem " + WORD[v].toLowerCase(),
+    plural(w.buyN, "achat") + " (" + sol(w.buySol) + " SOL)", plural(w.sellN, "vente") + " (" + sol(w.sellSol) + " SOL)"];
+  if (!live && typeof w.cover === "number") parts.push("mesurée à " + Math.round(w.cover * 100) + " %");
+  $("hDetail").textContent = parts.join(" · ");
+}
+
+/* ---------- Terminal ---------- */
+const feedBuf = [];
+let paused = false;
+
+function feedPush(tr) {
+  feedBuf.push(tr);
+  if (feedBuf.length > 200) feedBuf.splice(0, feedBuf.length - 200);
+}
+
+function lineNode(tr) {
+  const sigOk = /^[1-9A-HJ-NP-Za-km-z]{32,100}$/.test(tr.sig || "");
+  const id = tr.mint || tr.pool;
+  let label = short(id);
+  if (tr.mine && W.port) { const c = W.port.coins.find(x => x.mint === tr.mint); label = "TOI · " + (c ? (c.symbol || coinLabel(c)) : short(tr.mint)); }
+  return el("li", { class: "ln fresh " + tr.side + (tr.mine ? " mine" : "") },
+    sigOk ? el("a", { class: "t", href: "https://solscan.io/tx/" + tr.sig, target: "_blank", rel: "noopener", text: hms(tr.t) }) : el("span", { class: "t", text: hms(tr.t) }),
+    el("span", { class: "sd", text: tr.side === "buy" ? "BUY" : "SELL" }),
+    el("span", { class: "a", text: (tr.amt ? sol(tr.amt) : "?") + " " + tr.unit }),
+    id ? el("a", { class: "m", href: tr.mint ? "https://pump.fun/coin/" + tr.mint : "https://solscan.io/account/" + tr.pool, target: "_blank", rel: "noopener", text: label }) : el("span", { class: "m", text: "—" }));
+}
+
+function flushFeed() {
+  if (!feedBuf.length) return;
+  if (paused) { $("bPause").textContent = "Reprendre · " + feedBuf.length; return; }
+  const list = $("feed");
+  const empty = list.querySelector(".feed-empty");
+  if (empty) empty.remove();
+  const items = feedBuf.splice(0).slice(-160);
+  const frag = document.createDocumentFragment();
+  for (let i = items.length - 1; i >= 0; i--) frag.append(lineNode(items[i]));
+  list.prepend(frag);
+  while (list.children.length > 160) list.lastElementChild.remove();
+}
+
+/* ---------- Son ---------- */
+let actx = null;
+function cue(m) {
+  if (!S.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") actx.resume();
+    const t0 = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
+    o.type = "triangle";
+    o.frequency.setValueAtTime(m === "buy" ? 620 : 700, t0);
+    o.frequency.exponentialRampToValueAtTime(m === "buy" ? 980 : 340, t0 + 0.28);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4);
+    o.connect(g); g.connect(actx.destination);
+    o.start(t0); o.stop(t0 + 0.45);
+  } catch (e) { /* audio indisponible */ }
+  try { if (navigator.vibrate) navigator.vibrate(m === "buy" ? [60] : [60, 60, 60]); } catch (e) { /* pas de vibreur */ }
+}
+
+/* ---------- Wallet : chargement, synchro, direct ---------- */
+const CAP = 3000;
+const walletKey = a => "mr_wallet_v2:" + a;
+
+function loadWallet(addr) {
+  cancelTag("w" + W.gen);
+  W.gen++;
+  W.addr = addr || "";
+  W.port = null;
+  W.balance = null;
+  W.live = false;
+  W.syncing = false;
+  W.anAll = null;
+  W.analyzing = "";
+  W.lastSync = 0;
+  W.seen = new Set();
+  let data = W.addr ? store.get(walletKey(W.addr), null) : null;
+  if (!data || data.addr !== W.addr || !Array.isArray(data.recs)) data = { v: 2, addr: W.addr, recs: [], newest: null, missing: [], capped: false, syncedAt: 0 };
+  if (!Array.isArray(data.missing)) data.missing = [];
+  W.data = data;
+  for (const r of data.recs) W.seen.add(r.s);
+  rebuild();
+}
+
+function saveWallet() {
+  if (!W.addr) return;
+  if (!store.set(walletKey(W.addr), W.data)) toast("Le stockage du navigateur est plein : l'historique du wallet sera relu à chaque ouverture.", "sell");
+}
+
+function rebuild() {
+  W.port = W.addr ? buildPortfolio(W.data.recs) : null;
+  W.mints = new Set(W.port ? W.port.coins.map(c => c.mint) : []);
+  if (W.port) {
+    for (const c of W.port.coins) {
+      const n = W.names[c.mint];
+      if (n && !c.name) c.name = n.n || "";
+      if (n && !c.symbol) c.symbol = n.s || "";
+    }
+  }
+}
+
+function makeRec(tx, sig, slot, order, blockTime) {
+  const rec = parseWalletTx(tx, W.addr, S.agent);
+  rec.s = sig;
+  rec.sl = slot || tx.slot || 0;
+  rec.o = order;
+  rec.t = blockTime || tx.blockTime || Math.floor(Date.now() / 1000);
+  if (tx.meta && tx.meta.err) rec.e = 1;
+  return rec;
+}
+
+async function syncWallet(full) {
+  if (!W.addr || W.syncing) return;
+  const gen = W.gen, tag = "w" + gen;
+  W.syncing = true;
+  W.prog = { done: 0, total: 0, phase: "list" };
+  if (full) { W.data = { v: 2, addr: W.addr, recs: [], newest: null, missing: [], capped: false, syncedAt: 0 }; W.seen = new Set(); rebuild(); }
+  renderPnl();
+  refreshBalance();
+  try {
+    const fresh = [];
+    let before = null;
+    for (;;) {
+      const opt = { limit: 1000, commitment: "confirmed" };
+      if (before) opt.before = before;
+      if (W.data.newest) opt.until = W.data.newest;
+      const page = await rpc("getSignaturesForAddress", [W.addr, opt], "low", tag);
+      if (gen !== W.gen) return;
+      if (!Array.isArray(page) || !page.length) break;
+      fresh.push(...page);
+      W.prog.total = fresh.length;
+      renderWalletBar();
+      if (page.length < 1000) break;
+      if (fresh.length >= CAP) { W.data.capped = true; break; }
+      before = page[page.length - 1].signature;
+    }
+    const todo = [];
+    fresh.forEach((x, i) => { if (!W.seen.has(x.signature)) todo.push({ s: x.signature, sl: x.slot, t: x.blockTime, o: -i }); });
+    for (const m of W.data.missing) if (!W.seen.has(m.s) && !todo.some(x => x.s === m.s)) todo.push(m);
+    W.data.missing = [];
+    W.prog = { done: 0, total: todo.length, phase: "tx" };
+    renderWalletBar();
+    let sinceSave = 0;
+    await Promise.all(todo.map(async job => {
+      let tx = null;
+      try { tx = await rpc("getTransaction", [job.s, TXOPT], "low", tag); }
+      catch (e) { if (e && e.cancelled) return; diag.wErr++; }
+      if (gen !== W.gen) return;
+      W.prog.done++;
+      if (tx) {
+        if (!W.seen.has(job.s)) { W.seen.add(job.s); W.data.recs.push(makeRec(tx, job.s, job.sl, job.o, job.t)); }
+      } else W.data.missing.push(job);
+      if (++sinceSave >= 40) { sinceSave = 0; saveWallet(); }
+      renderProgSoon();
+    }));
+    if (gen !== W.gen) return;
+    if (fresh.length) W.data.newest = fresh[0].signature;
+    W.data.syncedAt = Date.now();
+    saveWallet();
+    rebuild();
+    await resolveNames(tag);
+    if (gen !== W.gen) return;
+    rebuild();
+    if (W.data.missing.length) toast(plural(W.data.missing.length, "transaction") + " pas encore lue" + (W.data.missing.length > 1 ? "s" : "") + " : nouvel essai à la prochaine actualisation.");
+  } catch (e) {
+    if (gen === W.gen && !(e && e.cancelled)) toast("Lecture du wallet impossible : " + (e && e.message ? e.message : "erreur RPC") + ". Réessaie, ou mets une clé Helius dans Réglages.", "sell");
+  } finally {
+    if (gen === W.gen) { W.syncing = false; W.lastSync = Date.now(); renderPnl(); }
+  }
+}
+
+let catchUpTimer = 0;
+function walletCatchUp() {
+  clearTimeout(catchUpTimer);
+  catchUpTimer = setTimeout(() => { if (W.addr && !W.syncing && Date.now() - W.lastSync > 15000) syncWallet(false); }, 1200);
+}
+
+async function refreshBalance() {
+  if (!W.addr) return;
+  const gen = W.gen;
+  try {
+    const res = await rpc("getBalance", [W.addr, { commitment: "confirmed" }], "high", "w" + gen);
+    if (gen === W.gen && res && typeof res.value === "number") { W.balance = res.value; renderGoal(); }
+  } catch (e) { /* solde indisponible */ }
+}
+
+function onWalletLogs(v, slot) {
+  if (!v || !v.signature || W.seen.has(v.signature)) return;
+  diag.wNotif++;
+  fetchWalletTx(v.signature, slot, 0, W.gen);
+}
+
+async function fetchWalletTx(sig, slot, tries, gen) {
+  let tx = null;
+  try { tx = await rpc("getTransaction", [sig, TXOPT], "high", "w" + gen); }
+  catch (e) { if (e && e.cancelled) return; diag.wErr++; }
+  if (gen !== W.gen || W.seen.has(sig)) return;
+  if (!tx) { if (tries < 6) setTimeout(() => fetchWalletTx(sig, slot, tries + 1, gen), 1500 + tries * 1000); return; }
+  const rec = makeRec(tx, sig, slot, ++W.seq, tx.blockTime);
+  W.seen.add(sig);
+  W.data.recs.push(rec);
+  saveWallet();
+  const before = new Map(W.port ? W.port.coins.map(c => [c.mint, c.status]) : []);
+  rebuild();
+  announce(before, rec);
+  refreshBalance();
+  if (rec.cr || rec.k === "trade") resolveNames("w" + gen).then(() => { if (gen === W.gen) { rebuild(); renderPnl(); } });
+  renderPnl();
+}
+
+function announce(before, rec) {
+  if (rec.k !== "trade" || !W.port) return;
+  for (const p of rec.m || []) {
+    const c = W.port.coins.find(x => x.mint === p[0]);
+    if (!c) continue;
+    if (c.status === "closed" && before.get(c.mint) === "open") toast(coinLabel(c) + " vendu : " + lamS(c.realized) + " SOL" + (c.invested ? " (" + pctS(c.pct) + ")" : ""), c.realized >= 0 ? "buy" : "sell");
+    else if (p[1] > 0 && !before.has(c.mint)) toast("Nouvelle position : " + coinLabel(c));
+  }
+}
+
+/* Noms des coins : CreateEvent, sinon métadonnées Token-2022, sinon API DAS si le RPC la propose */
+async function resolveNames(tag) {
+  if (!W.port) return;
+  const need = W.port.coins.filter(c => !c.name && !W.names[c.mint]).map(c => c.mint);
+  if (!need.length) return;
+  for (let i = 0; i < need.length; i += 100) {
+    const chunk = need.slice(i, i + 100);
+    try {
+      const res = await rpc("getMultipleAccounts", [chunk, { encoding: "jsonParsed" }], "low", tag);
+      ((res && res.value) || []).forEach((a, j) => {
+        const info = a && a.data && a.data.parsed && a.data.parsed.info;
+        const ext = info && Array.isArray(info.extensions) ? info.extensions.find(x => x && x.extension === "tokenMetadata") : null;
+        const st = ext && ext.state;
+        if (st && (st.name || st.symbol)) W.names[chunk[j]] = { n: String(st.name || "").slice(0, 40), s: String(st.symbol || "").slice(0, 16) };
+      });
+    } catch (e) { break; }
+  }
+  const still = need.filter(m => !W.names[m]);
+  if (still.length && !W.noDas) {
+    try {
+      for (let i = 0; i < still.length; i += 100) {
+        const res = await rpc("getAssetBatch", { ids: still.slice(i, i + 100) }, "low", tag);
+        for (const a of res || []) {
+          const md = a && a.content && a.content.metadata;
+          if (a && a.id && md && (md.name || md.symbol)) W.names[a.id] = { n: String(md.name || "").slice(0, 40), s: String(md.symbol || "").slice(0, 16) };
+        }
+      }
+    } catch (e) { W.noDas = true; }
+  }
+  store.set(KEYS.names, W.names);
+}
+
+async function refreshPrice() {
+  try {
+    const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
+    const j = await r.json();
+    const p = j && j.solana && j.solana.usd;
+    if (p > 0) { W.price = p; store.set(KEYS.price, { p, at: Date.now() }); renderPnl(); }
+  } catch (e) { /* pas de prix : on affiche seulement les SOL */ }
+}
+
+/* ---------- L'agent sur les coins du wallet ---------- */
+let anSaveTimer = 0;
+function saveANSoon() { clearTimeout(anSaveTimer); anSaveTimer = setTimeout(() => store.set(KEYS.an, AN), 800); }
+
+function addLiveAgent(mint, tMs, isBuy, l) {
+  const a = AN[mint] || (AN[mint] = { at: 0, ev: [], live: true });
+  a.ev.push([Math.floor(tMs / 1000), 1, isBuy ? 1 : 0, l]);
+  if (a.ev.length > 400) a.ev.splice(0, a.ev.length - 400);
+  saveANSoon();
+  if (currentView === "pnl" && UI.expanded.has(mint)) renderPnlSoon();
+}
+
+async function analyzeCoin(c) {
+  if (!c || !c.sigs.length || !W.addr) return;
+  const gen = W.gen, tag = "w" + gen;
+  const mine = new Set(c.sigs);
+  const opt = { limit: 150, commitment: "confirmed", until: c.sigs[0] };
+  if (c.status === "closed") opt.before = c.sigs[c.sigs.length - 1];
+  const page = await rpc("getSignaturesForAddress", [c.mint, opt], "low", tag);
+  if (gen !== W.gen) return;
+  const list = (Array.isArray(page) ? page : []).filter(x => !x.err && !mine.has(x.signature));
+  const evs = [];
+  await Promise.all(list.map(async x => {
+    let tx = null;
+    try { tx = await rpc("getTransaction", [x.signature, TXOPT], "low", tag); } catch (e) { return; }
+    if (!tx || (tx.meta && tx.meta.err)) return;
+    const lg = parseLogs(tx.meta && tx.meta.logMessages);
+    let events = lg.events.filter(e => e.type === "trade");
+    if (!events.length) events = parseInner(tx).filter(e => e.type === "trade");
+    const viaMayhem = lg.progs.has(MAYHEM);
+    for (const ev of events) {
+      if (ev.mint && ev.mint !== c.mint) continue;
+      if (ev.user === W.addr) continue;
+      const who = ev.user === S.agent || viaMayhem ? 1 : 2;
+      evs.push([ev.ts || x.blockTime || 0, who, ev.isBuy ? 1 : 0, lamportsOf(ev), x.slot || 0]);
+    }
+  }));
+  if (gen !== W.gen) return;
+  evs.sort((a, b) => (a[4] - b[4]) || (a[0] - b[0]));
+  AN[c.mint] = { at: Date.now(), ev: evs.map(e => e.slice(0, 4)), capped: (Array.isArray(page) ? page.length : 0) >= 150 };
+  store.set(KEYS.an, AN);
+}
+
+function agentStats(c) {
+  const a = AN[c.mint];
+  const st = { b: 0, s: 0, bl: 0, sl: 0, o: 0, src: "" };
+  if (a && a.ev.length) {
+    for (const e of a.ev) {
+      if (e[1] === 1) { if (e[2]) { st.b++; st.bl += e[3]; } else { st.s++; st.sl += e[3]; } }
+      else st.o++;
+    }
+    st.src = a.at ? "an" : "live";
+  } else if (a && a.at) st.src = "an";
+  else if (c.agB + c.agS) { st.b = c.agB; st.s = c.agS; st.bl = c.agBL; st.sl = c.agSL; st.src = "tx"; }
+  return st;
+}
+function agentNet(c) {
+  const st = agentStats(c);
+  if (!st.src) return null;
+  if (!st.b && !st.s) return "none";
+  return st.bl - st.sl >= 0 ? "buy" : "sell";
+}
+
+function stripEvents(c) {
+  const out = [];
+  const set = new Set(c.sigs);
+  for (const r of W.data.recs) {
+    if (!set.has(r.s)) continue;
+    const p = (r.m || []).find(x => x[0] === c.mint);
+    if (p) out.push([r.t || 0, 0, p[1] > 0 ? 1 : 0, Math.abs(r.d)]);
+  }
+  const a = AN[c.mint];
+  if (a) for (const e of a.ev) out.push(e);
+  const key = e => e[0] * 10 + (e[1] === 0 ? (e[2] ? 0 : 9) : 5);
+  return out.sort((x, y) => key(x) - key(y));
+}
+
+async function analyzeAll() {
+  if (W.anAll) { W.anAll.stop = true; renderCats(lastSum); return; }
+  const todo = W.port ? W.port.coins.filter(c => c.mayhem && !(AN[c.mint] && AN[c.mint].at)).sort((a, b) => (b.closedAt || b.lastAt) - (a.closedAt || a.lastAt)) : [];
+  if (!todo.length) { toast("Tous tes coins Mayhem sont déjà analysés."); return; }
+  const gen = W.gen;
+  W.anAll = { done: 0, total: todo.length, stop: false };
+  renderCats(lastSum);
+  for (const c of todo) {
+    if (!W.anAll || W.anAll.stop || gen !== W.gen) break;
+    try { await analyzeCoin(c); } catch (e) { /* coin suivant */ }
+    if (W.anAll) W.anAll.done++;
+    renderCats(lastSum);
+  }
+  if (gen === W.gen) { W.anAll = null; renderPnl(); }
+}
+
+/* ---------- Rendu de Mon PnL ---------- */
+let currentView = "live", lastSum = null, pnlQueued = false, pendingList = false, progQueued = false;
+const PERIOD_LABEL = { day: "aujourd'hui", "7d": "7 derniers jours", "30d": "30 derniers jours", all: "depuis le début" };
+
+function periodFrom(p) {
+  const now = Date.now();
+  if (p === "day") { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.getTime() / 1000; }
+  if (p === "7d") return now / 1000 - 7 * 86400;
+  if (p === "30d") return now / 1000 - 30 * 86400;
+  return 0;
+}
+
+function summary() {
+  const from = periodFrom(UI.period);
+  const coins = W.port ? W.port.coins : [];
+  const closed = coins.filter(c => c.status === "closed" && c.closedAt >= from).sort((a, b) => a.closedAt - b.closedAt);
+  const open = coins.filter(c => c.status === "open");
+  const wins = closed.filter(c => c.realized > 0), losses = closed.filter(c => c.realized < 0);
+  const fl = { fee: 0, cashback: 0, dep: 0, wd: 0, failed: 0, other: 0 };
+  for (const f of W.port ? W.port.flows : []) {
+    if (f.t < from) continue;
+    if (f.k === "fee") fl.fee += f.d;
+    else if (f.k === "cashback") fl.cashback += f.d;
+    else if (f.k === "transfer") { if (f.d > 0) fl.dep += f.d; else fl.wd += f.d; }
+    else if (f.k === "failed") fl.failed += f.d;
+    else fl.other += f.d;
+  }
+  const trades = closed.reduce((a, c) => a + c.realized, 0);
+  return { from, closed, open, wins, losses, trades, fl, net: trades + fl.fee + fl.cashback + fl.failed };
+}
+
+function renderPnlSoon() {
+  if (pnlQueued) return;
+  pnlQueued = true;
+  requestAnimationFrame(() => { pnlQueued = false; renderPnl(); });
+}
+
+function renderPnl() {
+  renderDiagSoon();
+  if (currentView !== "pnl") return;
+  const has = !!W.addr;
+  $("onb").hidden = has;
+  $("pnlMain").hidden = !has;
+  if (!has) return;
+  const first = firstSync();
+  $("pnlLoading").hidden = !first;
+  $("pPeriod").hidden = first;
+  $("pnlBody").hidden = first;
+  renderWalletBar();
+  if (first) return;
+  const s = summary();
+  lastSum = s;
+  renderHero(s);
+  renderStats(s);
+  renderChart(s.closed);
+  renderGoal();
+  renderCats(s);
+  renderList(s);
+  renderFlows(s);
+}
+
+function renderProgSoon() {
+  if (progQueued) return;
+  progQueued = true;
+  requestAnimationFrame(() => { progQueued = false; renderWalletBar(); });
+}
+
+function renderWalletBar() {
+  if (currentView !== "pnl" || !W.addr) return;
+  const link = $("wLink");
+  link.textContent = short(W.addr);
+  link.href = "https://solscan.io/account/" + W.addr;
+  const st = $("wState");
+  st.dataset.live = W.live ? "1" : "0";
+  let txt;
+  if (W.syncing) txt = "Lecture de l'historique…";
+  else if (W.live) txt = "En direct";
+  else if (W.data && W.data.syncedAt) txt = "Lu il y a " + ago(Date.now() - W.data.syncedAt);
+  else txt = "Pas encore lu";
+  $("wStateText").textContent = txt;
+  $("wSync").disabled = W.syncing;
+  const first = firstSync();
+  const p = W.prog;
+  const ratio = p.phase === "tx" && p.total ? p.done / p.total : 0;
+  const progTxt = p.phase === "tx"
+    ? (p.total ? "Transactions lues : " + p.done + " / " + p.total : "Aucune nouvelle transaction")
+    : "Liste des transactions : " + p.total + "…";
+  $("wProg").hidden = !W.syncing || first;
+  if (W.syncing && !first) {
+    $("wProgFill").style.width = (ratio * 100).toFixed(1) + "%";
+    $("wProgText").textContent = progTxt;
+  }
+  if (first) {
+    $("ldNum").textContent = p.phase === "tx" && p.total ? p.done + " / " + p.total : p.total ? p.total + " trouvées…" : "…";
+    $("ldFill").style.width = (ratio * 100).toFixed(1) + "%";
+  }
+}
+function firstSync() { return W.syncing && !(W.data && W.data.syncedAt); }
+
+function renderHero(s) {
+  const lbl = "Résultat net · " + PERIOD_LABEL[UI.period];
+  $("hLabel").textContent = lbl;
+  const big = $("hNet");
+  const empty = !s.closed.length && !s.fl.fee && !s.fl.cashback && !s.fl.failed;
+  if (empty) {
+    big.textContent = W.syncing ? "…" : "0 SOL";
+    big.className = "big";
+  } else {
+    big.textContent = lamS(s.net) + " SOL";
+    big.className = "big " + (s.net > 0 ? "up" : s.net < 0 ? "down" : "");
+  }
+  $("hUsd").textContent = empty ? "" : usdTxt(s.net, true);
+  const br = $("hBreak");
+  br.replaceChildren();
+  const part = (label, v) => br.append(el("span", null, label + " ", el("b", { text: lamS(v) })));
+  part("Trades", s.trades);
+  if (s.fl.fee || s.fl.cashback) part("Revenus créateur", s.fl.fee + s.fl.cashback);
+  if (s.fl.failed) part("Tx échouées", s.fl.failed);
+}
+
+function statTile(label, value, sub, tone) {
+  return el("div", { class: "stat" }, el("div", { class: "lbl", text: label }), el("div", { class: "sv " + (tone || ""), text: value }), el("div", { class: "ss", text: sub }));
+}
+
+function renderStats(s) {
+  const n = s.closed.length;
+  const avg = arr => arr.reduce((a, c) => a + c.realized, 0) / arr.length;
+  const best = n ? s.closed.reduce((a, c) => c.realized > a.realized ? c : a) : null;
+  const worst = n ? s.closed.reduce((a, c) => c.realized < a.realized ? c : a) : null;
+  $("stats").replaceChildren(
+    statTile("Coins fermés", String(n), plural(s.open.length, "position") + " en cours"),
+    statTile("Réussite", n ? Math.round(s.wins.length / n * 100) + " %" : "—", s.wins.length + " gagné" + (s.wins.length > 1 ? "s" : "") + " · " + s.losses.length + " perdu" + (s.losses.length > 1 ? "s" : "")),
+    statTile("Gain moyen", s.wins.length ? lamS(avg(s.wins)) : "—", "SOL par coin gagnant", s.wins.length ? "up" : ""),
+    statTile("Perte moyenne", s.losses.length ? lamS(avg(s.losses)) : "—", "SOL par coin perdant", s.losses.length ? "down" : ""),
+    statTile("Meilleur", best && best.realized > 0 ? lamS(best.realized) : "—", best && best.realized > 0 ? coinLabel(best) : "aucun gain", best && best.realized > 0 ? "up" : ""),
+    statTile("Pire", worst && worst.realized < 0 ? lamS(worst.realized) : "—", worst && worst.realized < 0 ? coinLabel(worst) : "aucune perte", worst && worst.realized < 0 ? "down" : "")
+  );
+}
+
+function niceTicks(lo, hi, count) {
+  const range = hi - lo || 1;
+  const raw = range / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(f => f * mag).find(st => range / st <= count + 0.5) || 10 * mag;
+  const out = [];
+  for (let v = Math.floor(lo / step) * step; v <= hi + step * 1e-6; v += step) out.push(+v.toFixed(10));
+  if (out[out.length - 1] < hi) out.push(+(out[out.length - 1] + step).toFixed(10));
+  return out;
+}
+
+function renderChart(closed) {
+  const box = $("chart");
+  box.replaceChildren();
+  box.onpointermove = box.onpointerdown = box.onpointerleave = box.onkeydown = null;
+  const endTxt = $("chartEnd");
+  const total = closed.reduce((a, c) => a + c.realized, 0);
+  endTxt.textContent = closed.length ? lamS(total) + " SOL · " + plural(closed.length, "trade") : "";
+  endTxt.className = "chart-end " + (total > 0 ? "up" : total < 0 ? "down" : "");
+  if (!closed.length) {
+    box.append(el("div", { class: "chart-empty", text: W.syncing ? "Lecture de ton historique…" : "Aucun trade fermé sur cette période." }));
+    return;
+  }
+  const Wd = box.clientWidth || 340, H = box.clientHeight || 210;
+  const m = { l: 48, r: 14, t: 18, b: 26 };
+  const ys = [0];
+  let cum = 0;
+  for (const c of closed) { cum += c.realized; ys.push(cum); }
+  const n = ys.length - 1;
+  const lo0 = Math.min(0, ...ys) / 1e9, hi0 = Math.max(0, ...ys) / 1e9;
+  const ticks = niceTicks(lo0, hi0 > lo0 ? hi0 : lo0 + 0.01, 4);
+  const lo = ticks[0], hi = ticks[ticks.length - 1];
+  const pw = Wd - m.l - m.r, ph = H - m.t - m.b;
+  const X = i => m.l + (n ? i / n : 0.5) * pw;
+  const Y = v => m.t + (hi - v / 1e9) / (hi - lo) * ph;
+  const svg = svgEl("svg", { viewBox: "0 0 " + Wd + " " + H, preserveAspectRatio: "none", "aria-hidden": "true" });
+  const step = ticks.length > 1 ? ticks[1] - ticks[0] : 1;
+  let decimals = 0;
+  while (decimals < 4 && Math.abs(Math.round(step * Math.pow(10, decimals)) - step * Math.pow(10, decimals)) > 1e-6) decimals++;
+  for (const tv of ticks) {
+    const y = m.t + (hi - tv) / (hi - lo) * ph;
+    svg.append(svgEl("line", { class: tv === 0 ? "c-zero" : "c-grid", x1: m.l, x2: Wd - m.r, y1: y, y2: y }));
+    svg.append(svgEl("text", { class: "c-ax", x: m.l - 8, y: y + 3.5, "text-anchor": "end" }, (tv > 0 ? "+" : tv < 0 ? "−" : "") + nf(decimals).format(Math.abs(tv))));
+  }
+  const zeroY = Y(0);
+  const defs = svgEl("defs");
+  const uid = "c" + Math.random().toString(36).slice(2, 7);
+  const cu = svgEl("clipPath", { id: uid + "u" }); cu.append(svgEl("rect", { x: 0, y: 0, width: Wd, height: Math.max(0, zeroY) }));
+  const cd = svgEl("clipPath", { id: uid + "d" }); cd.append(svgEl("rect", { x: 0, y: zeroY, width: Wd, height: Math.max(0, H - zeroY) }));
+  defs.append(cu, cd);
+  svg.append(defs);
+  let line = "";
+  ys.forEach((v, i) => { line += (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1) + " "; });
+  const area = line + "L" + X(n).toFixed(1) + " " + zeroY.toFixed(1) + " L" + X(0).toFixed(1) + " " + zeroY.toFixed(1) + " Z";
+  svg.append(svgEl("path", { class: "c-up", d: area, "clip-path": "url(#" + uid + "u)" }));
+  svg.append(svgEl("path", { class: "c-down", d: area, "clip-path": "url(#" + uid + "d)" }));
+  svg.append(svgEl("path", { class: "c-line", d: line }));
+  const last = ys[n];
+  const endFill = last > 0 ? "var(--buy)" : last < 0 ? "var(--sell)" : "var(--text)";
+  svg.append(svgEl("circle", { class: "c-dot", cx: X(n), cy: Y(last), r: 4.5, fill: endFill }));
+  svg.append(svgEl("text", { class: "c-ax", x: m.l, y: H - 6, "text-anchor": "start" }, DAYF.format(new Date(closed[0].closedAt * 1000))));
+  if (n > 1) svg.append(svgEl("text", { class: "c-ax", x: Wd - m.r, y: H - 6, "text-anchor": "end" }, DAYF.format(new Date(closed[n - 1].closedAt * 1000))));
+  const cross = svgEl("line", { class: "c-cross", x1: 0, x2: 0, y1: m.t, y2: H - m.b, visibility: "hidden" });
+  const hov = svgEl("circle", { class: "c-dot", cx: 0, cy: 0, r: 4.5, fill: "var(--text)", visibility: "hidden" });
+  svg.append(cross, hov);
+  box.append(svg);
+  const tip = el("div", { class: "tip", hidden: "" });
+  box.append(tip);
+  let cur = n;
+  const show = i => {
+    i = Math.max(1, Math.min(n, i));
+    cur = i;
+    const c = closed[i - 1];
+    const x = X(i), y = Y(ys[i]);
+    cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
+    hov.setAttribute("cx", x); hov.setAttribute("cy", y); hov.setAttribute("visibility", "visible");
+    hov.setAttribute("fill", c.realized > 0 ? "var(--buy)" : c.realized < 0 ? "var(--sell)" : "var(--text)");
+    tip.replaceChildren(
+      el("b", { text: lamS(c.realized) + " SOL" }),
+      el("div", { class: "nm", text: "#" + i + " · " + coinLabel(c) }),
+      el("div", { text: "Cumul " + lamS(ys[i]) + " SOL" }),
+      el("div", { text: dayHm(c.closedAt) })
+    );
+    tip.hidden = false;
+    const tw = tip.offsetWidth || 160;
+    tip.style.left = Math.max(0, Math.min(Wd - tw, x - tw / 2)) + "px";
+    tip.style.top = (y < H / 2 ? H - m.b - (tip.offsetHeight || 80) - 4 : 0) + "px";
+  };
+  const hide = () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); hov.setAttribute("visibility", "hidden"); };
+  const fromEvent = e => { const r = box.getBoundingClientRect(); return Math.round((e.clientX - r.left - m.l) / (pw || 1) * n); };
+  box.onpointermove = e => show(fromEvent(e));
+  box.onpointerdown = e => show(fromEvent(e));
+  box.onpointerleave = e => { if (e.pointerType === "mouse") hide(); };
+  box.onkeydown = e => {
+    if (e.key === "ArrowLeft") { show(cur - 1); e.preventDefault(); }
+    else if (e.key === "ArrowRight") { show(cur + 1); e.preventDefault(); }
+    else if (e.key === "Escape") hide();
+  };
+  box.onblur = hide;
+}
+
+function renderGoal() {
+  if (currentView !== "pnl" || !W.addr) return;
+  const goal = S.goal > 0 ? S.goal : 1000;
+  const bal = W.balance;
+  $("gBal").textContent = bal == null ? "—" : lam(bal) + " SOL";
+  $("gGoal").textContent = "Objectif " + nf(0).format(goal) + " SOL";
+  const p = bal == null ? 0 : Math.min(1, bal / 1e9 / goal);
+  $("gPct").textContent = bal == null ? "—" : nf(p < 0.01 ? 2 : 1).format(p * 100) + " %";
+  $("gFill").style.width = (p * 100).toFixed(2) + "%";
+  $("gMeter").setAttribute("aria-valuenow", (p * 100).toFixed(1));
+}
+
+function renderCats(s) {
+  if (!s || currentView !== "pnl") return;
+  const rows = [
+    ["Coins créés par moi", c => c.created, true],
+    ["Coins achetés", c => !c.created, false],
+    ["Coins Mayhem", c => c.mayhem, true],
+    ["Coins hors Mayhem", c => !c.mayhem, false],
+    ["Agent net acheteur sur le coin", c => agentNet(c) === "buy", true],
+    ["Agent net vendeur sur le coin", c => agentNet(c) === "sell", false],
+    ["Live : agent acheteur à l'achat", c => moodAt(c.openedAt) === "buy", true],
+    ["Live : agent vendeur à l'achat", c => moodAt(c.openedAt) === "sell", false]
+  ];
+  const tbl = $("cats");
+  tbl.replaceChildren(el("thead", null, el("tr", null, el("th", { text: "Catégorie" }), el("th", { text: "Coins" }), el("th", { text: "Réussite" }), el("th", { text: "Résultat" }))));
+  const body = el("tbody");
+  let shown = 0;
+  for (const [label, test, first] of rows) {
+    const arr = s.closed.filter(test);
+    if (!arr.length) continue;
+    shown++;
+    const tot = arr.reduce((a, c) => a + c.realized, 0);
+    const w = arr.filter(c => c.realized > 0).length;
+    body.append(el("tr", { class: first && shown > 1 ? "sep" : null },
+      el("td", { text: label }),
+      el("td", { text: String(arr.length) }),
+      el("td", { text: Math.round(w / arr.length * 100) + " %" }),
+      el("td", { class: tot > 0 ? "up" : tot < 0 ? "down" : "", text: lamS(tot) })));
+  }
+  if (!shown) body.append(el("tr", null, el("td", { colspan: "4", class: "empty", text: "Pas encore de trade fermé sur cette période." })));
+  tbl.append(body);
+
+  const box = $("anAll");
+  box.replaceChildren();
+  const mayhemCoins = W.port ? W.port.coins.filter(c => c.mayhem) : [];
+  const left = mayhemCoins.filter(c => !(AN[c.mint] && AN[c.mint].at)).length;
+  if (!mayhemCoins.length) return;
+  if (W.anAll) {
+    box.append(el("p", { class: "help", text: "Analyse de l'agent : " + W.anAll.done + " / " + W.anAll.total + " coins…" }));
+    box.append(el("div", null, el("button", { class: "btn sm", type: "button", text: "Arrêter l'analyse", onclick: analyzeAll })));
+  } else if (left) {
+    box.append(el("p", { class: "help", text: "Pour savoir combien tu gagnes quand l'agent achète ou vend ton coin, analyse ses trades sur tes coins Mayhem (" + plural(left, "coin") + " à analyser)." }));
+    box.append(el("div", null, el("button", { class: "btn sm", type: "button", text: "Analyser l'agent sur mes coins", onclick: analyzeAll })));
+  }
+}
+
+function renderList(s) {
+  const list = $("coinList");
+  if (list.contains(document.activeElement) && document.activeElement.tagName === "TEXTAREA") { pendingList = true; return; }
+  pendingList = false;
+  $("nAll").textContent = String(s.closed.length + s.open.length);
+  $("nWin").textContent = String(s.wins.length);
+  $("nLoss").textContent = String(s.losses.length);
+  $("nOpen").textContent = String(s.open.length);
+  let items;
+  if (UI.filter === "win") items = s.wins.slice();
+  else if (UI.filter === "loss") items = s.losses.slice();
+  else if (UI.filter === "open") items = s.open.slice();
+  else items = s.open.concat(s.closed);
+  items.sort((a, b) => (b.closedAt || b.lastAt) - (a.closedAt || a.lastAt));
+  list.replaceChildren();
+  if (!items.length) {
+    const msg = W.syncing ? "Lecture de ton historique…" : UI.filter === "open" ? "Aucune position en cours." : UI.filter === "win" ? "Aucun trade gagnant sur cette période." : UI.filter === "loss" ? "Aucun trade perdant sur cette période." : "Aucun trade sur cette période.";
+    list.append(el("li", { class: "empty", text: msg }));
+    return;
+  }
+  for (const c of items.slice(0, 300)) list.append(coinNode(c));
+}
+
+function coinNode(c) {
+  const open = c.status === "open";
+  const tone = open ? "open" : c.realized > 0 ? "win" : c.realized < 0 ? "loss" : "";
+  const exp = UI.expanded.has(c.mint);
+  const meta = el("span", { class: "c-meta" },
+    el("span", { text: dayHm(c.openedAt) }),
+    !open && c.closedAt && c.openedAt ? el("span", { text: "tenu " + dur(c.closedAt - c.openedAt) }) : null,
+    c.created ? el("span", { class: "chip me", text: "Créé" }) : null,
+    c.mayhem ? el("span", { class: "chip mh", text: "Mayhem" }) : null);
+  const res = open
+    ? el("span", { class: "c-res" }, el("b", { text: lam(c.invested) + " SOL" }), el("span", { text: "en cours" }))
+    : el("span", { class: "c-res" }, el("b", { text: lamS(c.realized) + " SOL" }), el("span", { text: c.invested ? pctS(c.pct) : "" }));
+  const btn = el("button", { class: "coin-row", type: "button", "aria-expanded": exp ? "true" : "false" },
+    el("span", { class: "c-main" }, el("span", { class: "c-name", text: coinLabel(c) }), meta), res);
+  const li = el("li", { class: "coin " + tone }, btn);
+  btn.addEventListener("click", () => {
+    if (UI.expanded.has(c.mint)) UI.expanded.delete(c.mint); else UI.expanded.add(c.mint);
+    li.replaceWith(coinNode(c));
+  });
+  if (exp) li.append(coinDetail(c));
+  return li;
+}
+
+function coinDetail(c) {
+  const open = c.status === "open";
+  const facts = [
+    ["Investi", lam(c.invested) + " SOL"],
+    ["Récupéré", lam(c.received) + " SOL"],
+    ["Achats", String(c.nBuy)],
+    ["Ventes", String(c.nSell)],
+    ["Ouverture", dayHm(c.openedAt)],
+    ["Fermeture", open ? "en cours" : dayHm(c.closedAt)]
+  ];
+  if (c.triggers) facts.push(["Déclenchements", String(c.triggers)]);
+  if (!open && c.invested) facts.push(["Résultat", lamS(c.realized) + " SOL · " + pctS(c.pct)]);
+  const dl = el("dl", { class: "facts" });
+  for (const [k, v] of facts) dl.append(el("div", null, el("dt", { text: k }), el("dd", { text: v })));
+  const box = el("div", { class: "coin-detail" }, dl);
+  if (c.mayhem) box.append(agentBox(c));
+  const noteId = "note-" + c.mint;
+  const ta = el("textarea", { id: noteId, rows: "2", placeholder: "Ce que tu as fait, ce que tu changerais…" });
+  ta.value = NOTES[c.mint] || "";
+  let t = 0;
+  ta.addEventListener("input", () => {
+    clearTimeout(t);
+    t = setTimeout(() => { if (ta.value.trim()) NOTES[c.mint] = ta.value.slice(0, 1000); else delete NOTES[c.mint]; store.set(KEYS.notes, NOTES); }, 400);
+  });
+  ta.addEventListener("blur", () => { if (pendingList && lastSum) renderList(lastSum); });
+  box.append(el("div", { class: "field" }, el("label", { class: "lbl", for: noteId, text: "Notes" }), ta));
+  box.append(el("div", { class: "links" },
+    el("a", { href: "https://pump.fun/coin/" + c.mint, target: "_blank", rel: "noopener", text: "Voir sur pump.fun" }),
+    el("a", { href: "https://solscan.io/token/" + c.mint, target: "_blank", rel: "noopener", text: "Voir sur Solscan" })));
+  return box;
+}
+
+function agentBox(c) {
+  const wrap = el("div", { class: "agent-box" }, el("div", { class: "lbl", text: "L'agent Mayhem sur ce coin" }));
+  const a = AN[c.mint];
+  const evs = stripEvents(c);
+  const st = agentStats(c);
+  if (a && a.ev.length) {
+    const strip = el("div", { class: "strip" });
+    const max = 90;
+    evs.slice(0, max).forEach(e => {
+      const amt = lam(e[3]) + " SOL";
+      if (e[1] === 0) strip.append(el("b", { class: e[2] ? "mb" : "ms", title: (e[2] ? "Ton achat " : "Ta vente ") + amt, text: e[2] ? "B" : "S" }));
+      else if (e[1] === 1) strip.append(el("i", { class: e[2] ? "ab" : "as", title: (e[2] ? "Agent achète " : "Agent vend ") + amt }));
+      else strip.append(el("i", { class: "ot", title: (e[2] ? "Autre trader achète " : "Autre trader vend ") + amt }));
+    });
+    if (evs.length > max) strip.append(el("span", { class: "more", text: "+" + (evs.length - max) }));
+    wrap.append(strip);
+    wrap.append(el("div", { class: "legend" },
+      el("span", null, el("i", { style: "background:var(--buy)" }), "agent achète"),
+      el("span", null, el("i", { style: "background:var(--sell)" }), "agent vend"),
+      st.o ? el("span", null, el("i", { style: "border:2px solid var(--faint)" }), "autre trader") : null));
+  }
+  let sumTxt;
+  if (st.b || st.s) {
+    const net = st.bl - st.sl;
+    sumTxt = "Agent : " + plural(st.b, "achat") + " (" + lam(st.bl) + " SOL), " + plural(st.s, "vente") + " (" + lam(st.sl) + " SOL) → net " + (net >= 0 ? "acheteur" : "vendeur") + " " + lamS(net) + " SOL.";
+    if (st.o) sumTxt += " Autres traders : " + plural(st.o, "trade") + ".";
+    if (st.src === "live") sumTxt += " Capté en direct, analyse complète possible.";
+    if (a && a.capped) sumTxt += " Limité aux 150 premières transactions.";
+  } else if (st.src === "an") sumTxt = "L'agent n'a pas tradé ce coin pendant ta position." + (st.o ? " Autres traders : " + plural(st.o, "trade") + "." : "");
+  else sumTxt = "Pas encore analysé.";
+  wrap.append(el("p", { class: "an-sum" + (st.b || st.s ? "" : " muted"), text: sumTxt }));
+  const busy = W.analyzing === c.mint;
+  const btn = el("button", { class: "btn sm", type: "button", text: busy ? "Analyse en cours…" : a && a.at ? "Réanalyser" : "Analyser l'agent sur ce coin" });
+  if (busy || W.anAll) btn.disabled = true;
+  btn.addEventListener("click", async () => {
+    if (W.analyzing) return;
+    W.analyzing = c.mint;
+    renderPnl();
+    try { await analyzeCoin(c); }
+    catch (e) { if (!(e && e.cancelled)) toast("Analyse impossible : " + (e && e.message ? e.message : "erreur RPC"), "sell"); }
+    W.analyzing = "";
+    renderPnl();
+  });
+  wrap.append(el("div", null, btn));
+  return wrap;
+}
+
+function renderFlows(s) {
+  const dl = $("flows");
+  dl.replaceChildren();
+  const rows = [
+    ["Frais créateur reçus", s.fl.fee],
+    ["Cashback", s.fl.cashback],
+    ["Dépôts", s.fl.dep],
+    ["Retraits", s.fl.wd],
+    ["Frais de tx échouées", s.fl.failed],
+    ["Autres mouvements", s.fl.other]
+  ].filter(r => Math.abs(r[1]) >= 1);
+  if (!rows.length) { dl.append(el("dt", { text: "Rien sur cette période." }), el("dd", { text: "" })); return; }
+  for (const [k, v] of rows) dl.append(el("dt", { text: k }), el("dd", { text: lamS(v) + " SOL" }));
+}
+
+/* ---------- Horloge ---------- */
+let lastTick = Date.now(), tickN = 0;
+function tick() {
+  const now = Date.now();
+  const dt = now - lastTick;
+  lastTick = now;
+  tickN++;
+  if (now >= win.end) {
+    archive(win, false);
+    win = newWindow(now);
+    if (wsState === "live") win.since = now;
+    persistWin();
+    renderHistory();
+    renderVerdict();
+  }
+  if (wsState === "live") {
+    if (now - lastMsg < 45000) win.measured = Math.min(1800, win.measured + Math.min(dt, 45000) / 1000);
+    if (now - lastMsg > 75000) { try { ws.close(); } catch (e) { /* déjà fermé */ } }
+    else if (now - lastMsg > 25000 && tickN % 10 === 0) { try { ws.send(PING); } catch (e) { /* socket fermée */ } }
+  }
+  if (tickN % 5 === 0) { persistWin(); renderVerdict(); }
+  if (tickN % 15 === 0 && currentView === "pnl" && !W.syncing) renderWalletBar();
+  if (tickN % 600 === 0) refreshPrice();
+  renderClock(now);
+  renderRecent(now);
+  if (currentView === "settings" && tickN % 2 === 0) renderDiag(now);
+}
+
+/* ---------- Réglages ---------- */
+function syncAgentLink() { $("agentLink").textContent = short(S.agent); $("agentLink").href = "https://solscan.io/account/" + S.agent; }
+function fillSettings() {
+  $("sWallet").value = S.wallet || "";
+  $("sGoal").value = String(S.goal || 1000).replace(".", ",");
+  $("sRpc").value = S.rpc;
+  $("sWs").value = S.ws;
+  $("sAgent").value = S.agent;
+  setSeg("sBasis", S.basis);
+  $("sSound").checked = !!S.sound;
+}
+function saveSettings() { store.set(KEYS.settings, S); }
+function num(v) { const x = parseFloat(String(v).replace(/\s/g, "").replace(",", ".")); return isFinite(x) ? x : NaN; }
+
+function setSeg(id, v) { for (const b of $(id).querySelectorAll("button[data-v]")) b.setAttribute("aria-pressed", b.dataset.v === v ? "true" : "false"); }
+function bindSeg(id, onPick) {
+  $(id).addEventListener("click", ev => {
+    const b = ev.target.closest("button[data-v]");
+    if (!b) return;
+    setSeg(id, b.dataset.v);
+    onPick(b.dataset.v);
+  });
+}
+
+function useWallet(addr) {
+  if (addr === W.addr) return;
+  S.wallet = addr;
+  saveSettings();
+  UI.expanded.clear();
+  loadWallet(addr);
+  retry = 0;
+  connect();
+  if (addr) syncWallet(false);
+  renderPnl();
+}
+
+$("onb").addEventListener("submit", ev => {
+  ev.preventDefault();
+  const a = $("wAddr").value.trim();
+  if (!isAddress(a)) { toast("Cette adresse n'est pas une adresse Solana valide. Copie-la depuis le bouton Dépôt de l'app pump.fun.", "sell"); return; }
+  $("wAddr").value = "";
+  useWallet(a);
+  toast("Wallet suivi. Lecture de ton historique…", "buy");
+});
+$("wSync").addEventListener("click", () => syncWallet(false));
+
+$("sWForm").addEventListener("submit", ev => {
+  ev.preventDefault();
+  const a = $("sWallet").value.trim();
+  const g = num($("sGoal").value);
+  if (a && !isAddress(a)) { toast("Cette adresse n'est pas une adresse Solana valide.", "sell"); return; }
+  if ($("sGoal").value.trim() && !(g > 0)) { toast("L'objectif doit être un nombre de SOL, par exemple 1000.", "sell"); return; }
+  if (g > 0) S.goal = g;
+  saveSettings();
+  if (a !== W.addr) useWallet(a);
+  toast(a ? "Wallet enregistré." : "Plus aucun wallet suivi.");
+});
+$("bResync").addEventListener("click", () => {
+  if (!W.addr) { toast("Aucun wallet suivi pour l'instant.", "sell"); return; }
+  armed($("bResync"), "Confirmer : tout relire", () => { syncWallet(true); toast("Relecture complète lancée."); });
+});
+
+$("sForm").addEventListener("submit", ev => {
+  ev.preventDefault();
+  const rpcUrl = $("sRpc").value.trim() || PUBLIC_RPC;
+  const wsUrl = $("sWs").value.trim();
+  const agent = $("sAgent").value.trim() || AGENT;
+  if (!/^https?:\/\//i.test(rpcUrl)) { toast("L'URL du RPC doit commencer par https://", "sell"); return; }
+  if (wsUrl && !/^wss?:\/\//i.test(wsUrl)) { toast("L'URL WebSocket doit commencer par wss://", "sell"); return; }
+  if (!isAddress(agent)) { toast("L'adresse de l'agent n'est pas valide.", "sell"); return; }
+  S = Object.assign({}, S, { rpc: rpcUrl, ws: wsUrl, agent });
+  saveSettings();
+  syncAgentLink();
+  retry = 0;
+  connect();
+  toast("Réglages enregistrés. Reconnexion…");
+});
+$("bRpcDefault").addEventListener("click", () => { $("sRpc").value = PUBLIC_RPC; $("sWs").value = ""; });
+bindSeg("sBasis", v => { S.basis = v; saveSettings(); renderVerdict(); renderHistory(); renderRecent(Date.now()); });
+$("sSound").addEventListener("change", () => { S.sound = $("sSound").checked; saveSettings(); if (S.sound) cue("buy"); });
+$("bClearHist").addEventListener("click", () => armed($("bClearHist"), "Confirmer l'effacement", () => {
+  hist = [];
+  store.set(KEYS.hist, hist);
+  selectedStart = null;
+  renderHistory();
+  toast("Demi-heures effacées");
+}));
+
+$("bExport").addEventListener("click", async () => {
+  const data = JSON.stringify({ app: "mayhem-radar", version: 2, exported: new Date().toISOString(), wallet: S.wallet || "", goal: S.goal, notes: NOTES, analyses: AN, history: hist });
+  const box = $("exportText");
+  box.value = data;
+  try { await navigator.clipboard.writeText(data); box.hidden = true; toast("Sauvegarde copiée. Colle-la dans une note pour la garder."); }
+  catch (e) { box.hidden = false; box.focus(); box.select(); toast("Copie automatique impossible : sélectionne le texte affiché et copie-le."); }
+});
+$("bImportToggle").addEventListener("click", () => { $("importBox").hidden = !$("importBox").hidden; });
+$("bImport").addEventListener("click", () => {
+  let data;
+  try { data = JSON.parse($("importText").value); } catch (e) { toast("Ce texte n'est pas une sauvegarde Mayhem Radar.", "sell"); return; }
+  if (!data || data.app !== "mayhem-radar") { toast("Ce texte n'est pas une sauvegarde Mayhem Radar.", "sell"); return; }
+  armed($("bImport"), "Confirmer le remplacement", () => {
+    NOTES = asObj(data.notes);
+    AN = asObj(data.analyses);
+    store.set(KEYS.notes, NOTES);
+    store.set(KEYS.an, AN);
+    if (Array.isArray(data.history)) { hist = data.history.filter(h => h && typeof h.start === "number").slice(0, 336); store.set(KEYS.hist, hist); renderHistory(); }
+    if (data.goal > 0) { S.goal = data.goal; saveSettings(); }
+    $("importText").value = "";
+    $("importBox").hidden = true;
+    if (data.wallet && isAddress(data.wallet) && data.wallet !== W.addr) useWallet(data.wallet);
+    renderPnl();
+    toast("Sauvegarde importée.", "buy");
+  });
+});
+
+let diagQueued = false;
+function renderDiagSoon() { if (currentView !== "settings" || diagQueued) return; diagQueued = true; requestAnimationFrame(() => { diagQueued = false; renderDiag(Date.now()); }); }
+function renderDiag(now) {
+  let topUser = null, topN = 0;
+  for (const [u, c] of diag.users) if (c > topN) { topUser = u; topN = c; }
+  const rows = [
+    ["Live", STATUS_TEXT[wsState]],
+    ["Notifications de l'agent", diag.notif],
+    ["Trades de l'agent décodés", diag.trades],
+    ["Lus sans montant", diag.unread],
+    ["Dernier message", diag.lastMsg ? "il y a " + ago(now - diag.lastMsg) : "—"],
+    ["Compte qui trade", topUser ? short(topUser) + (topUser === S.agent ? " (agent)" : "") : "—"],
+    ["Wallet suivi", W.addr ? short(W.addr) + (W.live ? " · en direct" : "") : "aucun"],
+    ["Transactions du wallet", W.data ? W.data.recs.length + (W.data.capped ? " (limité à " + CAP + ")" : "") : 0],
+    ["Coins dans le PnL", W.port ? W.port.coins.length : 0],
+    ["Requêtes RPC", R.calls + " · " + R.errors + " en erreur"],
+    ["En attente", R.qHi.length + R.qLo.length]
+  ];
+  const dl = $("diag");
+  dl.replaceChildren();
+  for (const [k, v] of rows) dl.append(el("dt", { text: k }), el("dd", { text: String(v) }));
+}
+
+/* ---------- Navigation ---------- */
+function show(view) {
+  currentView = view;
+  document.body.dataset.view = view;
+  for (const b of document.querySelectorAll(".tab")) b.setAttribute("aria-selected", b.dataset.view === view ? "true" : "false");
+  $("v-live").hidden = view !== "live";
+  $("v-pnl").hidden = view !== "pnl";
+  $("v-settings").hidden = view !== "settings";
+  if (view === "pnl") { setSeg("pPeriod", UI.period); setSeg("pFilter", UI.filter); renderPnl(); }
+  if (view === "settings") { fillSettings(); renderDiag(Date.now()); }
+  if (view === "live") renderHistory();
+  window.scrollTo(0, 0);
+}
+document.querySelector(".tabs").addEventListener("click", ev => { const b = ev.target.closest(".tab"); if (b) show(b.dataset.view); });
+bindSeg("pPeriod", v => { UI.period = v; store.set(KEYS.ui, { period: UI.period, filter: UI.filter }); renderPnl(); });
+bindSeg("pFilter", v => { UI.filter = v; store.set(KEYS.ui, { period: UI.period, filter: UI.filter }); if (lastSum) renderList(lastSum); });
+
+let resizeTimer = 0;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (currentView === "pnl" && lastSum) renderChart(lastSum.closed); }, 150); });
+
+$("bPause").addEventListener("click", () => {
+  paused = !paused;
+  $("bPause").setAttribute("aria-pressed", String(paused));
+  $("bPause").textContent = paused ? "Reprendre" : "Figer";
+  if (!paused) flushFeed();
+});
+$("bDock").addEventListener("click", () => {
+  const min = $("dock").classList.toggle("min");
+  document.body.classList.toggle("dock-min", min);
+  $("bDock").textContent = min ? "▴" : "▾";
+  $("bDock").setAttribute("aria-expanded", String(!min));
+  $("bDock").setAttribute("aria-label", min ? "Agrandir le terminal" : "Réduire le terminal");
+});
+
+/* ---------- Démarrage ---------- */
+const cachedPrice = store.get(KEYS.price, null);
+if (cachedPrice && cachedPrice.p > 0 && Date.now() - cachedPrice.at < 6 * 3600 * 1000) W.price = cachedPrice.p;
+syncAgentLink();
+loadWallet(isAddress(S.wallet) ? S.wallet : "");
+renderVerdict();
+renderHistory();
+renderClock(Date.now());
+renderRecent(Date.now());
+connect();
+setInterval(tick, 1000);
+refreshPrice();
+if (W.addr) syncWallet(false);
+const startView = location.hash.replace("#", "");
+if (startView === "pnl" || startView === "settings") show(startView);
+})();
+</script>
+</body>
+</html>
